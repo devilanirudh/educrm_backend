@@ -16,7 +16,8 @@ from app.schemas.classes import (
     ClassSubjectCreate,
     ClassSubjectResponse
 )
-from app.core.permissions import get_current_user, UserRole
+from app.api.deps import get_current_user
+from app.core.permissions import UserRole
 from app.models.user import User
 
 router = APIRouter()
