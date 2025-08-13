@@ -88,10 +88,10 @@ def create_sample_data():
         teacher = Teacher(
             user_id=teacher_user.id,
             employee_id="EMP001",
-            qualification="M.Sc. Mathematics",
+            qualifications="M.Sc. Mathematics",
             specialization="Mathematics",
-            experience_years=10,
-            joining_date=date(2020, 8, 1),
+            experience=10,
+            hire_date=date(2020, 8, 1),
             department="Mathematics",
             designation="Senior Teacher",
             employment_type="permanent",

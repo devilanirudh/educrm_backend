@@ -207,8 +207,8 @@ class StudentBusStop(Base):
     
     # Relationships
     student = relationship("Student")
-    pickup_stop = relationship("BusStop", foreign_keys=[pickup_stop_id])
-    drop_stop = relationship("BusStop", foreign_keys=[drop_stop_id])
+    pickup_stop = relationship("BusStop", foreign_keys=[pickup_stop_id], overlaps="pickup_assignments")
+    drop_stop = relationship("BusStop", foreign_keys=[drop_stop_id], overlaps="drop_assignments")
     
     def __repr__(self):
         return f"<StudentBusStop(student_id={self.student_id}, pickup_stop_id={self.pickup_stop_id})>"
