@@ -175,12 +175,12 @@ def create_sample_data():
         
         # Create Classes
         classes_data = [
-            {"name": "Grade 1", "section": "A", "grade_level": 1, "academic_year": "2024-2025", "capacity": 30},
-            {"name": "Grade 1", "section": "B", "grade_level": 1, "academic_year": "2024-2025", "capacity": 30},
-            {"name": "Grade 2", "section": "A", "grade_level": 2, "academic_year": "2024-2025", "capacity": 30},
-            {"name": "Grade 3", "section": "A", "grade_level": 3, "academic_year": "2024-2025", "capacity": 30},
-            {"name": "Grade 4", "section": "A", "grade_level": 4, "academic_year": "2024-2025", "capacity": 30},
-            {"name": "Grade 5", "section": "A", "grade_level": 5, "academic_year": "2024-2025", "capacity": 30},
+            {"name": "Grade 1", "section": "A", "grade_level": 1, "academic_year": "2024-2025", "max_students": 30},
+            {"name": "Grade 1", "section": "B", "grade_level": 1, "academic_year": "2024-2025", "max_students": 30},
+            {"name": "Grade 2", "section": "A", "grade_level": 2, "academic_year": "2024-2025", "max_students": 30},
+            {"name": "Grade 3", "section": "A", "grade_level": 3, "academic_year": "2024-2025", "max_students": 30},
+            {"name": "Grade 4", "section": "A", "grade_level": 4, "academic_year": "2024-2025", "max_students": 30},
+            {"name": "Grade 5", "section": "A", "grade_level": 5, "academic_year": "2024-2025", "max_students": 30},
         ]
         
         classes = []
