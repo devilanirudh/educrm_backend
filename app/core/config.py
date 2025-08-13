@@ -39,10 +39,19 @@ class Settings(BaseSettings):
         "http://localhost:3000",  # React development server
         "http://localhost:3001",  # Alternative React port
         "http://127.0.0.1:3000",
+        "https://educrm-frontend.vercel.app",  # Vercel frontend
+        "https://educrm-frontend-git-main.vercel.app",  # Vercel preview deployments
+        "https://*.vercel.app",  # All Vercel subdomains
     ]
     
     # Trusted Hosts (for production)
-    ALLOWED_HOSTS: List[str] = ["localhost", "127.0.0.1"]
+    ALLOWED_HOSTS: List[str] = [
+        "localhost", 
+        "127.0.0.1",
+        "educrmbackend-production.up.railway.app",
+        "educrm-frontend.vercel.app",
+        "*.vercel.app"
+    ]
     
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:

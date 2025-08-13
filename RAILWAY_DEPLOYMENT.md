@@ -33,7 +33,7 @@ SECRET_KEY=your-production-secret-key-change-this
 DATABASE_URL=postgresql://username:password@host:port/database
 
 # CORS (add your frontend URL)
-BACKEND_CORS_ORIGINS=https://your-frontend-domain.com,http://localhost:3000
+BACKEND_CORS_ORIGINS=https://educrm-frontend.vercel.app,https://educrm-frontend-git-main.vercel.app,https://*.vercel.app,http://localhost:3000
 
 # Optional - Email Configuration
 SMTP_HOST=your-smtp-host
