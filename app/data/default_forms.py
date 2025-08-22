@@ -209,9 +209,242 @@ DEFAULT_STUDENT_FORM = {
     ]
 }
 
+# Default teacher form based on Teacher schema
+DEFAULT_TEACHER_FORM = {
+    "name": "Teacher Registration Form",
+    "key": "teacher_form",
+    "description": "Default form for teacher registration based on Teacher schema",
+    "entityType": "teacher",
+    "fields": [
+        {
+            "id": "email",
+            "field_type": FieldType.EMAIL,
+            "label": "Email Address",
+            "field_name": "email",
+            "placeholder": "Enter email address",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "type": "email"
+            }
+        },
+        {
+            "id": "password",
+            "field_type": FieldType.PASSWORD,
+            "label": "Password",
+            "field_name": "password",
+            "placeholder": "Enter password",
+            "is_required": True,
+            "is_filterable": False,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": True,
+                "minLength": 6
+            }
+        },
+        {
+            "id": "first_name",
+            "field_type": FieldType.TEXT,
+            "label": "First Name",
+            "field_name": "first_name",
+            "placeholder": "Enter first name",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "minLength": 1
+            }
+        },
+        {
+            "id": "last_name",
+            "field_type": FieldType.TEXT,
+            "label": "Last Name",
+            "field_name": "last_name",
+            "placeholder": "Enter last name",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "minLength": 1
+            }
+        },
+        {
+            "id": "employee_id",
+            "field_type": FieldType.TEXT,
+            "label": "Employee ID",
+            "field_name": "employee_id",
+            "placeholder": "Enter employee ID",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "minLength": 1
+            }
+        },
+        {
+            "id": "hire_date",
+            "field_type": FieldType.DATE,
+            "label": "Hire Date",
+            "field_name": "hire_date",
+            "placeholder": "Select hire date",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            }
+        },
+        {
+            "id": "phone",
+            "field_type": FieldType.PHONE,
+            "label": "Phone Number",
+            "field_name": "phone",
+            "placeholder": "Enter phone number",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False,
+                "pattern": r"^[0-9+\-\s()]+$"
+            }
+        },
+        {
+            "id": "qualifications",
+            "field_type": FieldType.TEXTAREA,
+            "label": "Qualifications",
+            "field_name": "qualifications",
+            "placeholder": "Enter qualifications",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False
+            }
+        },
+        {
+            "id": "experience",
+            "field_type": FieldType.NUMBER,
+            "label": "Years of Experience",
+            "field_name": "experience",
+            "placeholder": "Enter years of experience",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False,
+                "min": 0,
+                "max": 50
+            }
+        },
+        {
+            "id": "specialization",
+            "field_type": FieldType.TEXT,
+            "label": "Specialization",
+            "field_name": "specialization",
+            "placeholder": "Enter specialization",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False
+            }
+        },
+        {
+            "id": "employment_type",
+            "field_type": FieldType.SELECT,
+            "label": "Employment Type",
+            "field_name": "employment_type",
+            "placeholder": "Select employment type",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            },
+            "options": [
+                {"id": "1", "label": "Full Time", "value": "full_time"},
+                {"id": "2", "label": "Part Time", "value": "part_time"},
+                {"id": "3", "label": "Contract", "value": "contract"},
+                {"id": "4", "label": "Visiting", "value": "visiting"}
+            ]
+        },
+        {
+            "id": "department",
+            "field_type": FieldType.SELECT,
+            "label": "Department",
+            "field_name": "department",
+            "placeholder": "Select department",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False
+            },
+            "options": [
+                {"id": "1", "label": "Mathematics", "value": "mathematics"},
+                {"id": "2", "label": "English", "value": "english"},
+                {"id": "3", "label": "Science", "value": "science"},
+                {"id": "4", "label": "History", "value": "history"},
+                {"id": "5", "label": "Geography", "value": "geography"},
+                {"id": "6", "label": "Computer Science", "value": "computer_science"},
+                {"id": "7", "label": "Physical Education", "value": "physical_education"},
+                {"id": "8", "label": "Arts", "value": "arts"},
+                {"id": "9", "label": "Music", "value": "music"},
+                {"id": "10", "label": "Administration", "value": "administration"}
+            ]
+        },
+        {
+            "id": "salary",
+            "field_type": FieldType.NUMBER,
+            "label": "Salary",
+            "field_name": "salary",
+            "placeholder": "Enter salary",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False,
+                "min": 0
+            }
+        },
+        {
+            "id": "designation",
+            "field_type": FieldType.TEXT,
+            "label": "Designation",
+            "field_name": "designation",
+            "placeholder": "Enter designation",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False
+            }
+        },
+        {
+            "id": "teaching_philosophy",
+            "field_type": FieldType.TEXTAREA,
+            "label": "Teaching Philosophy",
+            "field_name": "teaching_philosophy",
+            "placeholder": "Enter teaching philosophy",
+            "is_required": False,
+            "is_filterable": False,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False
+            }
+        }
+    ]
+}
+
 # Dictionary mapping entity types to their default forms
 DEFAULT_FORMS: Dict[str, Dict[str, Any]] = {
     "student": DEFAULT_STUDENT_FORM,
+    "teacher": DEFAULT_TEACHER_FORM,
     # Add more default forms for other entities here
 }
 
