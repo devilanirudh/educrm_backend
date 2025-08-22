@@ -50,12 +50,18 @@ class User(Base):
     
     # Relationships
     students = relationship("Student", back_populates="user", cascade="all, delete-orphan")
+    library_member = relationship("LibraryMember", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    hosted_classes = relationship("LiveClass", back_populates="teacher", cascade="all, delete-orphan")
     teachers = relationship("Teacher", back_populates="user", cascade="all, delete-orphan")
     parent_profiles = relationship("Parent", back_populates="user", cascade="all, delete-orphan")
     
     # Communication
     sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+
+    # Live Classes
+    hosted_classes = relationship("LiveClass", back_populates="teacher")
+    live_class_attendance = relationship("ClassAttendance", back_populates="user")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', role='{self.role}')>"
@@ -146,26 +152,7 @@ class Parent(Base):
         return f"<Parent(id={self.id}, user_id={self.user_id})>"
 
 
-class AuditLog(Base):
-    """Audit log for tracking user actions and system changes"""
-    __tablename__ = "audit_logs"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Nullable for system actions
-    action = Column(String(100), nullable=False)  # CREATE, UPDATE, DELETE, LOGIN, etc.
-    resource_type = Column(String(50), nullable=False)  # User, Student, Grade, etc.
-    resource_id = Column(String(50), nullable=True)  # ID of the affected resource
-    old_values = Column(Text, nullable=True)  # JSON of old values
-    new_values = Column(Text, nullable=True)  # JSON of new values
-    ip_address = Column(String(45), nullable=True)
-    user_agent = Column(Text, nullable=True)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    
-    # Relationships
-    user = relationship("User")
-    
-    def __repr__(self):
-        return f"<AuditLog(id={self.id}, action='{self.action}', resource='{self.resource_type}')>"
+
 
 
 class SystemNotification(Base):

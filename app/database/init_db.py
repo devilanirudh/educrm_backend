@@ -13,8 +13,8 @@ from app.models.academic import Subject, Class, ClassSubject
 from app.models.financial import FeeStructure, FeeType
 from app.models.content import CMSPage, NewsArticle
 from app.models.communication import Notification
-from app.models.transport import BusRoute, BusStop, Bus, Driver
-from app.models.library import Book, LibraryTransaction
+from app.models.transport import Route, Stop, Vehicle
+from app.models.library import Book, BookIssue
 from app.models.hostel import HostelBlock, HostelRoom, HostelAllocation
 import logging
 from datetime import date, datetime
@@ -30,6 +30,16 @@ def create_tables():
         logger.info("Database tables created successfully")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")
+        raise
+
+def drop_tables():
+    """Drop all database tables"""
+    try:
+        logger.info("Dropping database tables...")
+        Base.metadata.drop_all(bind=engine)
+        logger.info("Database tables dropped successfully")
+    except Exception as e:
+        logger.error(f"Error dropping tables: {e}")
         raise
 
 def create_sample_data():
@@ -373,6 +383,9 @@ def init_db():
     logger.info("Initializing database...")
     
     try:
+        # Drop existing tables
+        drop_tables()
+
         # Create tables
         create_tables()
         

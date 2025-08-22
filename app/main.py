@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 import uvicorn
 import os
 import sys
@@ -17,7 +18,7 @@ from app.core.config import settings
 from app.database.session import engine
 from app.database.init_db import init_db
 from app.api.v1 import auth, students, teachers, classes, assignments, exams, fees, live_classes
-from app.api.v1 import library, transport, hostel, events, cms, crm, reports, communication
+from app.api.v1 import library, transport, hostel, events, cms, crm, reports, communication, forms, report_cards, form_submissions, audit
 
 # Create FastAPI application
 app = FastAPI(
@@ -79,6 +80,10 @@ app.include_router(cms.router, prefix=f"{settings.API_V1_STR}/cms", tags=["Conte
 app.include_router(crm.router, prefix=f"{settings.API_V1_STR}/crm", tags=["Customer Relationship Management"])
 app.include_router(reports.router, prefix=f"{settings.API_V1_STR}/reports", tags=["Reports & Analytics"])
 app.include_router(communication.router, prefix=f"{settings.API_V1_STR}/communication", tags=["Communication"])
+app.include_router(forms.router, prefix=f"{settings.API_V1_STR}/forms", tags=["Form Builder"])
+app.include_router(form_submissions.router, prefix=f"{settings.API_V1_STR}/form-submissions", tags=["Form Submissions"])
+app.include_router(report_cards.router, prefix=f"{settings.API_V1_STR}/report-cards", tags=["Report Cards"])
+app.include_router(audit.router, prefix=f"{settings.API_V1_STR}/audit", tags=["Audit Logs"])
 
 @app.on_event("startup")
 async def startup_event():
@@ -108,7 +113,7 @@ async def health_check():
     try:
         # Test database connection
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         
         return {
             "status": "healthy",
@@ -158,3 +163,9 @@ if __name__ == "__main__":
         reload=settings.DEBUG,
         log_level="info" if not settings.DEBUG else "debug"
     )
+
+from app.schemas.user import UserResponse
+from app.schemas.student import StudentResponse
+
+UserResponse.model_rebuild()
+StudentResponse.model_rebuild()

@@ -2,7 +2,7 @@
 Teacher-related database models
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, Date, Table
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, Date, Table, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.session import Base
@@ -76,6 +76,12 @@ class Teacher(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Dynamic data for form builder
+    dynamic_data = Column(JSON, nullable=True)
+
+    # Permissions
+    can_create_class = Column(Boolean, default=False, nullable=False)
     
     # Relationships
     user = relationship("User", back_populates="teachers")
@@ -85,7 +91,6 @@ class Teacher(Base):
     # Teaching relationships
     assignments_created = relationship("Assignment", back_populates="teacher", cascade="all, delete-orphan")
     exams_created = relationship("Exam", back_populates="teacher", cascade="all, delete-orphan")
-    live_classes = relationship("LiveClass", back_populates="teacher", cascade="all, delete-orphan")
     
     # Attendance and schedule
     attendance_records = relationship("TeacherAttendance", back_populates="teacher", cascade="all, delete-orphan")

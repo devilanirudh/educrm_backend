@@ -20,6 +20,28 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
     
+    def create_user(self, **kwargs) -> User:
+        """
+        Create a new user
+        
+        Args:
+            **kwargs: User data
+            
+        Returns:
+            Created User object
+        """
+        try:
+            kwargs['hashed_password'] = get_password_hash(kwargs.pop('password'))
+            user = User(**kwargs)
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+            return user
+        except Exception as e:
+            logger.error(f"User creation error: {str(e)}")
+            self.db.rollback()
+            raise
+
     def authenticate_user(self, email_or_username: str, password: str) -> Optional[User]:
         """
         Authenticate user with email/username and password
@@ -360,3 +382,27 @@ class AuthService:
             logger.error(f"User activation error: {str(e)}")
             self.db.rollback()
             return False
+    def create_audit_log(self, user_id: int, action: str, details: Optional[str] = None) -> None:
+        """
+        Create an audit log entry
+        
+        Args:
+            user_id: User ID
+            action: Action performed
+            details: Additional details about the action
+        """
+        try:
+            from app.models.audit import AuditLog, ActionType
+            
+            log_entry = AuditLog(
+                user_id=user_id,
+                action=ActionType[action.upper()],
+                details=details
+            )
+            
+            self.db.add(log_entry)
+            self.db.commit()
+            
+        except Exception as e:
+            logger.error(f"Audit log creation error: {str(e)}")
+            self.db.rollback()

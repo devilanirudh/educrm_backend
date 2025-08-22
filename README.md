@@ -12,6 +12,23 @@ This is the backend API for the E-School Management Platform, built with FastAPI
 - **bcrypt**: Password hashing
 - **Uvicorn**: ASGI server implementation
 
+## Default Login Credentials
+
+When the database is initialized for the first time, the following sample users are created:
+
+-   **Admin**:
+    -   **Email**: `admin@school.edu`
+    -   **Password**: `admin123`
+-   **Teacher**:
+    -   **Email**: `teacher@school.edu`
+    -   **Password**: `teacher123`
+-   **Parent**:
+    -   **Email**: `parent@school.edu`
+    -   **Password**: `parent123`
+-   **Student**:
+    -   **Email**: `student@school.edu`
+    -   **Password**: `student123`
+
 ## Project Structure
 
 ```

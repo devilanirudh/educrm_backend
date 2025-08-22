@@ -77,6 +77,8 @@ class UserResponse(UserBase):
     postal_code: Optional[str] = None
     language_preference: str
     timezone: str
+    teacher: Optional['TeacherResponse'] = None
+    student: Optional['StudentResponse'] = None
     
     class Config:
         from_attributes = True
@@ -110,6 +112,7 @@ class TokenData(BaseModel):
     """Token payload data"""
     user_id: Optional[int] = None
     role: Optional[str] = None
+    current_role: Optional[str] = None
 
 
 class PasswordReset(BaseModel):
@@ -251,3 +254,48 @@ class BulkUserResponse(BaseModel):
     failed_users: List[dict]
     total_created: int
     total_failed: int
+
+
+class TeacherBase(BaseModel):
+    """Base teacher schema"""
+    employee_id: str
+    qualifications: Optional[str] = None
+    experience: Optional[int] = None
+    hire_date: date
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    employment_type: str
+    can_create_class: bool = False
+
+
+class TeacherCreate(TeacherBase):
+    """Schema for creating a new teacher"""
+    user: UserCreate
+
+
+class TeacherUpdate(BaseModel):
+    """Schema for updating a teacher"""
+    user: Optional[UserUpdate] = None
+    qualifications: Optional[str] = None
+    experience: Optional[int] = None
+    hire_date: Optional[date] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    employment_type: Optional[str] = None
+    is_active: Optional[bool] = None
+    can_create_class: Optional[bool] = None
+
+
+class TeacherResponse(TeacherBase):
+    """Schema for teacher response"""
+    id: int
+    user_id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    user: UserResponse
+
+    class Config:
+        from_attributes = True
+
+

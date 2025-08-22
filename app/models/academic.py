@@ -44,6 +44,7 @@ class Class(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)  # e.g., "Grade 1", "Class X"
     section = Column(String(10), nullable=True)  # A, B, C, etc.
+    stream = Column(String(100), nullable=True) # Science, Commerce, Arts
     grade_level = Column(Integer, nullable=False)  # 1, 2, 3, ..., 12
     academic_year = Column(String(20), nullable=False)  # e.g., "2024-2025"
     max_students = Column(Integer, nullable=True)
@@ -62,7 +63,7 @@ class Class(Base):
     timetable_slots = relationship("TimetableSlot", back_populates="class_info")
     assignments = relationship("Assignment", back_populates="class_info")
     exams = relationship("Exam", back_populates="class_info")
-    live_classes = relationship("LiveClass", back_populates="class_info")
+    live_classes = relationship("LiveClass", back_populates="class_")
     
     def __repr__(self):
         return f"<Class(id={self.id}, name='{self.name}', section='{self.section}')>"
@@ -341,68 +342,3 @@ class ExamAnswer(Base):
         return f"<ExamAnswer(id={self.id}, result_id={self.result_id}, question_id={self.question_id})>"
 
 
-class LiveClass(Base):
-    """Live online classes"""
-    __tablename__ = "live_classes"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
-    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
-    teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=False)
-    
-    # Schedule
-    scheduled_start = Column(DateTime(timezone=True), nullable=False)
-    scheduled_end = Column(DateTime(timezone=True), nullable=False)
-    actual_start = Column(DateTime(timezone=True), nullable=True)
-    actual_end = Column(DateTime(timezone=True), nullable=True)
-    
-    # Meeting details
-    meeting_id = Column(String(100), nullable=True)
-    meeting_password = Column(String(50), nullable=True)
-    meeting_link = Column(String(500), nullable=True)
-    recording_link = Column(String(500), nullable=True)
-    
-    # Settings
-    auto_record = Column(Boolean, default=True, nullable=False)
-    allow_chat = Column(Boolean, default=True, nullable=False)
-    allow_screen_sharing = Column(Boolean, default=False, nullable=False)
-    max_participants = Column(Integer, nullable=True)
-    
-    # Status
-    status = Column(String(20), nullable=False, default="scheduled")  # scheduled, live, completed, cancelled
-    
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
-    # Relationships
-    class_info = relationship("Class", back_populates="live_classes")
-    subject = relationship("Subject")
-    teacher = relationship("Teacher", back_populates="live_classes")
-    attendance = relationship("LiveClassAttendance", back_populates="live_class", cascade="all, delete-orphan")
-    
-    def __repr__(self):
-        return f"<LiveClass(id={self.id}, title='{self.title}', status='{self.status}')>"
-
-
-class LiveClassAttendance(Base):
-    """Attendance for live classes"""
-    __tablename__ = "live_class_attendance"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    live_class_id = Column(Integer, ForeignKey("live_classes.id"), nullable=False)
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
-    joined_at = Column(DateTime(timezone=True), nullable=True)
-    left_at = Column(DateTime(timezone=True), nullable=True)
-    duration_minutes = Column(Integer, nullable=True)
-    status = Column(String(20), nullable=False, default="registered")  # registered, joined, absent
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    
-    # Relationships
-    live_class = relationship("LiveClass", back_populates="attendance")
-    student = relationship("Student")
-    
-    def __repr__(self):
-        return f"<LiveClassAttendance(live_class_id={self.live_class_id}, student_id={self.student_id}, status='{self.status}')>"

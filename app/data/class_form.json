@@ -1,0 +1,56 @@
+{
+  "key": "class_form",
+  "name": "Class Form",
+  "fields": [
+    {
+      "id": "name",
+      "fieldName": "name",
+      "label": "Class Name",
+      "type": "text",
+      "isRequired": true,
+      "placeholder": "e.g., Grade 1"
+    },
+    {
+      "id": "section",
+      "fieldName": "section",
+      "label": "Section",
+      "type": "text",
+      "placeholder": "e.g., A"
+    },
+    {
+      "id": "stream",
+      "fieldName": "stream",
+      "label": "Stream",
+      "type": "text",
+      "placeholder": "e.g., Science"
+    },
+    {
+      "id": "grade_level",
+      "fieldName": "grade_level",
+      "label": "Grade Level",
+      "type": "number",
+      "isRequired": true
+    },
+    {
+      "id": "academic_year",
+      "fieldName": "academic_year",
+      "label": "Academic Year",
+      "type": "text",
+      "isRequired": true,
+      "placeholder": "e.g., 2024-2025"
+    },
+    {
+      "id": "class_teacher_id",
+      "fieldName": "class_teacher_id",
+      "label": "Class Teacher",
+      "type": "select",
+      "options": []
+    },
+    {
+      "id": "max_students",
+      "fieldName": "max_students",
+      "label": "Capacity",
+      "type": "number"
+    }
+  ]
+}

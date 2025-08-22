@@ -13,12 +13,45 @@ from app.core.permissions import UserRole
 from app.models.user import User
 from app.models.student import Student, AttendanceRecord, Grade, StudentDocument
 from app.models.academic import Class, Subject
+from app.models.form import Form
 from app.schemas.user import UserCreate, UserResponse
-from app.services.auth import AuthService
+from app.models.form import FieldType
+from app.core.security import get_password_hash
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+def validate_dynamic_data(db: Session, dynamic_data: dict):
+    """Validate dynamic data against the student_form schema"""
+    logger.info(f"Validating dynamic data: {dynamic_data}")
+    
+    student_form = db.query(Form).filter(Form.key == "student_form").first()
+    if not student_form:
+        logger.error("Student form schema not found")
+        raise HTTPException(status_code=404, detail="Student form schema not found")
+
+    errors = {}
+    for field in student_form.fields:
+        if field.is_required and field.field_name not in dynamic_data:
+            errors[field.field_name] = "This field is required"
+        
+        if field.field_name in dynamic_data:
+            value = dynamic_data[field.field_name]
+            if field.field_type == FieldType.NUMBER and not isinstance(value, (int, float)):
+                errors[field.field_name] = "Must be a number"
+            elif field.field_type == FieldType.DATE:
+                try:
+                    datetime.strptime(value, "%Y-%m-%d")
+                except ValueError:
+                    errors[field.field_name] = "Invalid date format. Use YYYY-MM-DD"
+
+    if errors:
+        logger.error(f"Validation errors: {errors}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"errors": errors}
+        )
 
 # Pydantic schemas for Student API
 from pydantic import BaseModel, EmailStr, validator
@@ -59,6 +92,9 @@ class StudentCreateRequest(BaseModel):
     hobbies: Optional[str] = None
     special_needs: Optional[str] = None
 
+    # Dynamic data
+    dynamic_data: Optional[dict] = None
+
 class StudentUpdateRequest(BaseModel):
     """Schema for updating student information"""
     first_name: Optional[str] = None
@@ -79,6 +115,7 @@ class StudentUpdateRequest(BaseModel):
     hobbies: Optional[str] = None
     special_needs: Optional[str] = None
     is_active: Optional[bool] = None
+    dynamic_data: Optional[dict] = None
 
 class AttendanceCreateRequest(BaseModel):
     """Schema for creating attendance record"""
@@ -90,8 +127,13 @@ class AttendanceCreateRequest(BaseModel):
     check_out_time: Optional[datetime] = None
     reason: Optional[str] = None
 
+# Add this new schema for dynamic form submission
+class StudentDynamicCreateRequest(BaseModel):
+    """Schema for creating a student from dynamic form data"""
+    dynamic_data: dict
+
 # Student CRUD Operations
-@router.get("/", response_model=dict)
+@router.get("", response_model=dict)
 async def list_students(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -99,6 +141,7 @@ async def list_students(
     class_id: Optional[int] = Query(None, description="Filter by class"),
     academic_year: Optional[str] = Query(None, description="Filter by academic year"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    filters: Optional[str] = Query(None, description="Dynamic filters based on form schema"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
@@ -110,7 +153,7 @@ async def list_students(
         joinedload(Student.current_class)
     )
     
-    # Apply filters
+    # Apply static filters
     if search:
         search_filter = or_(
             User.first_name.ilike(f"%{search}%"),
@@ -128,6 +171,20 @@ async def list_students(
     
     if is_active is not None:
         query = query.filter(Student.is_active == is_active)
+
+    # Apply dynamic filters
+    if filters:
+        try:
+            student_form = db.query(Form).filter(Form.key == "student_form").first()
+            if student_form:
+                for field in student_form.fields:
+                    if field.is_filterable and field.field_name in filters:
+                        value = filters[field.field_name]
+                        if value:
+                            query = query.filter(Student.dynamic_data[field.field_name].astext == str(value))
+        except Exception as e:
+            logger.error(f"Error applying dynamic filters: {e}")
+
     
     # Get total count
     total = query.count()
@@ -155,7 +212,8 @@ async def list_students(
             "roll_number": student.roll_number,
             "section": student.section,
             "is_active": student.is_active,
-            "created_at": student.created_at
+            "created_at": student.created_at,
+            "dynamic_data": student.dynamic_data
         }
         student_list.append(student_data)
     
@@ -168,13 +226,21 @@ async def list_students(
         "has_prev": skip > 0
     }
 
-@router.post("/", response_model=dict)
+@router.post("", response_model=dict)
 async def create_student(
     student_data: StudentCreateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
-    """Create a new student"""
+    # Log the incoming data for debugging
+    logger.info(f"Creating student with data: {student_data.dict()}")
+    
+    # Check if current user has permission (admin or staff)
+    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
     
     # Check if current user has permission (admin or staff)
     if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
@@ -184,6 +250,10 @@ async def create_student(
         )
     
     try:
+        # Validate dynamic data
+        if student_data.dynamic_data:
+            validate_dynamic_data(db, student_data.dynamic_data)
+
         # Check if email or student_id already exists
         existing_user = db.query(User).filter(User.email == student_data.email).first()
         if existing_user:
@@ -200,11 +270,10 @@ async def create_student(
             )
         
         # Create user account
-        auth_service = AuthService(db)
-        user = auth_service.create_user(
+        user = User(
             email=student_data.email,
             username=student_data.username,
-            password=student_data.password,
+            hashed_password=get_password_hash(student_data.password),
             first_name=student_data.first_name,
             last_name=student_data.last_name,
             phone=student_data.phone,
@@ -217,6 +286,9 @@ async def create_student(
             country=student_data.country,
             postal_code=student_data.postal_code
         )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
         
         # Create student record
         student = Student(
@@ -233,7 +305,8 @@ async def create_student(
             transportation_mode=student_data.transportation_mode,
             previous_school=student_data.previous_school,
             hobbies=student_data.hobbies,
-            special_needs=student_data.special_needs
+            special_needs=student_data.special_needs,
+            dynamic_data=student_data.dynamic_data
         )
         
         db.add(student)
@@ -256,6 +329,184 @@ async def create_student(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create student"
+        )
+
+@router.post("/dynamic", response_model=dict)
+async def create_student_from_dynamic_form(
+    student_data: StudentDynamicCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Create a new student from dynamic form data"""
+    
+    # Log the incoming data for debugging
+    logger.info(f"Creating student from dynamic form with data: {student_data.dynamic_data}")
+    
+    # Check if current user has permission (admin or staff)
+    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    try:
+        # Extract required fields from dynamic data
+        student_id = student_data.dynamic_data.get('student_id')
+        admission_date_str = student_data.dynamic_data.get('admission_date')
+        academic_year = student_data.dynamic_data.get('academic_year')
+        email = student_data.dynamic_data.get('email')
+        password = student_data.dynamic_data.get('password')
+        first_name = student_data.dynamic_data.get('first_name')
+        last_name = student_data.dynamic_data.get('last_name')
+        
+        if not student_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Student ID is required"
+            )
+        
+        if not admission_date_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admission date is required"
+            )
+        
+        if not academic_year:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Academic year is required"
+            )
+        
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is required"
+            )
+        
+        if not password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password is required"
+            )
+        
+        if not first_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="First name is required"
+            )
+        
+        if not last_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Last name is required"
+            )
+
+        # Parse admission date
+        try:
+            admission_date = datetime.strptime(admission_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid admission date format. Use YYYY-MM-DD"
+            )
+
+        # Check if student_id already exists
+        existing_student = db.query(Student).filter(Student.student_id == student_id).first()
+        if existing_student:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Student ID already exists"
+            )
+        
+        # Check if email already exists
+        existing_user = db.query(User).filter(User.email == email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Create user account
+        user = User(
+            email=email,
+            username=student_id.lower(),
+            hashed_password=get_password_hash(password),
+            first_name=first_name,
+            last_name=last_name,
+            phone=student_data.dynamic_data.get('phone'),
+            role=UserRole.STUDENT,
+            date_of_birth=None,  # Will be set if provided in dynamic data
+            gender=student_data.dynamic_data.get('gender'),
+            address=student_data.dynamic_data.get('address'),
+            city=student_data.dynamic_data.get('city'),
+            state=student_data.dynamic_data.get('state'),
+            country=student_data.dynamic_data.get('country'),
+            postal_code=student_data.dynamic_data.get('postal_code')
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        
+        # Create student record
+        student = Student(
+            user_id=user.id,
+            student_id=student_id,
+            admission_date=admission_date,
+            current_class_id=None,  # Will be set if provided
+            academic_year=academic_year,
+            roll_number=student_data.dynamic_data.get('roll_number'),
+            section=student_data.dynamic_data.get('section'),
+            blood_group=student_data.dynamic_data.get('blood_group'),
+            allergies=student_data.dynamic_data.get('allergies'),
+            medical_conditions=student_data.dynamic_data.get('medical_conditions'),
+            transportation_mode=student_data.dynamic_data.get('transportation_mode'),
+            previous_school=student_data.dynamic_data.get('previous_school'),
+            hobbies=student_data.dynamic_data.get('hobbies'),
+            special_needs=student_data.dynamic_data.get('special_needs'),
+            dynamic_data=student_data.dynamic_data
+        )
+        
+        db.add(student)
+        db.commit()
+        db.refresh(student)
+        
+        logger.info(f"Student {student.student_id} created by {current_user.email}")
+        
+        return {
+            "message": "Student created successfully",
+            "student_id": student.student_id,
+            "user_id": user.id,
+            "email": email,
+            "password": password,  # Return the password for admin reference
+            "student": {
+                "id": student.id,
+                "student_id": student.student_id,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "phone": user.phone,
+                    "is_active": user.is_active
+                },
+                "admission_date": student.admission_date,
+                "academic_year": student.academic_year,
+                "roll_number": student.roll_number,
+                "section": student.section,
+                "is_active": student.is_active,
+                "created_at": student.created_at,
+                "dynamic_data": student.dynamic_data
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating student from dynamic form: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while creating the student"
         )
 
 @router.get("/{student_id}", response_model=dict)
@@ -366,6 +617,10 @@ async def update_student(
         )
     
     try:
+        # Validate dynamic data
+        if student_data.dynamic_data:
+            validate_dynamic_data(db, student_data.dynamic_data)
+            
         # Update user information
         user = student.user
         if student_data.first_name is not None:
@@ -406,6 +661,8 @@ async def update_student(
             student.hobbies = student_data.hobbies
         if student_data.special_needs is not None:
             student.special_needs = student_data.special_needs
+        if student_data.dynamic_data is not None:
+            student.dynamic_data = student_data.dynamic_data
         
         db.commit()
         

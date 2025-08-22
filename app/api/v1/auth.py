@@ -26,6 +26,7 @@ from app.api.deps import get_current_user
 from app.schemas.user import UserCreate, UserResponse, Token, PasswordReset, PasswordResetConfirm
 from app.services.auth import AuthService
 from app.services.notification import NotificationService
+from app.core.permissions import UserRole
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,41 +44,55 @@ async def login(
     
     Returns access and refresh tokens
     """
+    logger.info(f"Login attempt for user: {form_data.username}")
     try:
         # Find user by email or username
+        logger.info("Querying for user...")
         user = db.query(User).filter(
-            (User.email == form_data.username) | 
+            (User.email == form_data.username) |
             (User.username == form_data.username)
         ).first()
+        logger.info(f"User found: {user.email if user else 'No'}")
         
         if not user:
+            logger.warning(f"User not found: {form_data.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
             )
         
         # Verify password
+        logger.info("Verifying password...")
         if not verify_password(form_data.password, user.hashed_password):
+            logger.warning(f"Invalid password for user: {user.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
             )
+        logger.info("Password verified.")
         
         # Check if user is active
         if not user.is_active:
+            logger.warning(f"Inactive account login attempt: {user.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Account is inactive"
             )
         
         # Create tokens
+        logger.info("Creating access and refresh tokens...")
         access_token = create_access_token(
             subject=user.id,
-            additional_claims={"role": user.role.value}
+            additional_claims={
+                "role": user.role.value,
+                "current_role": user.role.value
+            }
         )
         refresh_token = create_refresh_token(subject=user.id)
+        logger.info("Tokens created.")
         
         # Update last login
+        logger.info("Updating last login time.")
         user.last_login = datetime.utcnow()
         db.commit()
         
@@ -108,13 +123,14 @@ async def login(
             }
         }
         
-    except HTTPException:
+    except HTTPException as http_exc:
+        logger.warning(f"HTTP exception during login for {form_data.username}: {http_exc.detail}")
         raise
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
+        logger.error(f"An unexpected error occurred during login for {form_data.username}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Login failed"
+            detail="An internal error occurred during login."
         )
 
 @router.post("/refresh", response_model=Token)
@@ -446,3 +462,43 @@ async def change_password(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Password change failed"
         )
+
+@router.post("/switch-role", response_model=Token)
+async def switch_role(
+    new_role: UserRole,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Switch the current user's role (e.g., from Super Admin to Admin)
+    """
+    # Validate that the user is allowed to switch to the new role
+    if not current_user.role == UserRole.SUPER_ADMIN and not new_role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to switch to this role"
+        )
+
+    # Create a new access token with the updated current_role
+    access_token = create_access_token(
+        subject=current_user.id,
+        additional_claims={
+            "role": current_user.role.value,
+            "current_role": new_role.value
+        }
+    )
+    
+    # Log the role switch
+    auth_service = AuthService(db)
+    auth_service.create_audit_log(
+        user_id=current_user.id,
+        action="role_switch",
+        details=f"Switched role to {new_role.value}"
+    )
+
+    return {
+        "access_token": access_token,
+        "refresh_token": "",  # A new refresh token is not issued
+        "token_type": "bearer",
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }

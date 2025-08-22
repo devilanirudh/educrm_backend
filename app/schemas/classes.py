@@ -9,6 +9,7 @@ class ClassBase(BaseModel):
     """Base class schema"""
     name: str = Field(..., description="Class name (e.g., 'Grade 1', 'Class X')")
     section: Optional[str] = Field(None, description="Class section (e.g., 'A', 'B')")
+    stream: Optional[str] = Field(None, description="Stream (e.g., 'Science', 'Commerce')")
     grade_level: int = Field(..., ge=1, le=12, description="Grade level (1-12)")
     academic_year: str = Field(..., description="Academic year (e.g., '2024-2025')")
     max_students: Optional[int] = Field(None, ge=1, description="Maximum number of students")
@@ -26,6 +27,7 @@ class ClassUpdate(BaseModel):
     """Schema for updating a class"""
     name: Optional[str] = Field(None, description="Class name")
     section: Optional[str] = Field(None, description="Class section")
+    stream: Optional[str] = Field(None, description="Stream (e.g., 'Science', 'Commerce')")
     grade_level: Optional[int] = Field(None, ge=1, le=12, description="Grade level")
     academic_year: Optional[str] = Field(None, description="Academic year")
     max_students: Optional[int] = Field(None, ge=1, description="Maximum number of students")

@@ -13,11 +13,39 @@ from app.core.permissions import UserRole
 from app.models.user import User
 from app.models.teacher import Teacher
 from app.models.academic import Class, Subject
+from app.models.form import Form, FieldType
 from app.services.auth import AuthService
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+def validate_dynamic_data(db: Session, dynamic_data: dict):
+    """Validate dynamic data against the teacher_form schema"""
+    teacher_form = db.query(Form).filter(Form.key == "teacher_form").first()
+    if not teacher_form:
+        raise HTTPException(status_code=404, detail="Teacher form schema not found")
+
+    errors = {}
+    for field in teacher_form.fields:
+        if field.is_required and field.field_name not in dynamic_data:
+            errors[field.field_name] = "This field is required"
+        
+        if field.field_name in dynamic_data:
+            value = dynamic_data[field.field_name]
+            if field.field_type == FieldType.NUMBER and not isinstance(value, (int, float)):
+                errors[field.field_name] = "Must be a number"
+            elif field.field_type == FieldType.DATE:
+                try:
+                    datetime.strptime(value, "%Y-%m-%d")
+                except ValueError:
+                    errors[field.field_name] = "Invalid date format. Use YYYY-MM-DD"
+
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"errors": errors}
+        )
 
 # Pydantic schemas for Teacher API
 from pydantic import BaseModel, EmailStr
@@ -49,8 +77,10 @@ class TeacherCreateRequest(BaseModel):
     
     # Employment details
     hire_date: date
+    employment_type: str
     salary: Optional[float] = None
     department: Optional[str] = None
+    dynamic_data: Optional[dict] = None
 
 class TeacherUpdateRequest(BaseModel):
     """Schema for updating teacher information"""
@@ -68,15 +98,17 @@ class TeacherUpdateRequest(BaseModel):
     salary: Optional[float] = None
     department: Optional[str] = None
     is_active: Optional[bool] = None
+    dynamic_data: Optional[dict] = None
 
 # Teacher CRUD Operations
-@router.get("/", response_model=dict)
+@router.get("", response_model=dict)
 async def list_teachers(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     search: Optional[str] = Query(None, description="Search by name, email, or employee ID"),
     department: Optional[str] = Query(None, description="Filter by department"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    filters: Optional[str] = Query(None, description="Dynamic filters based on form schema"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
@@ -109,6 +141,19 @@ async def list_teachers(
     
     if is_active is not None:
         query = query.filter(Teacher.is_active == is_active)
+
+    # Apply dynamic filters
+    if filters:
+        try:
+            teacher_form = db.query(Form).filter(Form.key == "teacher_form").first()
+            if teacher_form:
+                for field in teacher_form.fields:
+                    if field.is_filterable and field.field_name in filters:
+                        value = filters[field.field_name]
+                        if value:
+                            query = query.filter(Teacher.dynamic_data[field.field_name].astext == str(value))
+        except Exception as e:
+            logger.error(f"Error applying dynamic filters: {e}")
     
     # Get total count
     total = query.count()
@@ -136,7 +181,8 @@ async def list_teachers(
             "department": teacher.department,
             "hire_date": teacher.hire_date,
             "is_active": teacher.is_active,
-            "created_at": teacher.created_at
+            "created_at": teacher.created_at,
+            "dynamic_data": teacher.dynamic_data
         }
         teacher_list.append(teacher_data)
     
@@ -149,7 +195,7 @@ async def list_teachers(
         "has_prev": skip > 0
     }
 
-@router.post("/", response_model=dict)
+@router.post("", response_model=dict)
 async def create_teacher(
     teacher_data: TeacherCreateRequest,
     db: Session = Depends(get_db),
@@ -165,6 +211,10 @@ async def create_teacher(
         )
     
     try:
+        # Validate dynamic data
+        if teacher_data.dynamic_data:
+            validate_dynamic_data(db, teacher_data.dynamic_data)
+
         # Check if email or employee_id already exists
         existing_user = db.query(User).filter(User.email == teacher_data.email).first()
         if existing_user:
@@ -207,8 +257,10 @@ async def create_teacher(
             experience=teacher_data.experience,
             specialization=teacher_data.specialization,
             hire_date=teacher_data.hire_date,
+            employment_type=teacher_data.employment_type,
             salary=teacher_data.salary,
-            department=teacher_data.department
+            department=teacher_data.department,
+            dynamic_data=teacher_data.dynamic_data
         )
         
         db.add(teacher)
@@ -290,7 +342,8 @@ async def get_teacher(
         "department": teacher.department,
         "is_active": teacher.is_active,
         "created_at": teacher.created_at,
-        "updated_at": teacher.updated_at
+        "updated_at": teacher.updated_at,
+        "dynamic_data": teacher.dynamic_data
     }
 
 @router.put("/{teacher_id}", response_model=dict)
@@ -326,6 +379,10 @@ async def update_teacher(
         )
     
     try:
+        # Validate dynamic data
+        if teacher_data.dynamic_data:
+            validate_dynamic_data(db, teacher_data.dynamic_data)
+            
         # Update user information
         user = teacher.user
         if teacher_data.first_name is not None:
@@ -354,6 +411,8 @@ async def update_teacher(
             teacher.specialization = teacher_data.specialization
         if teacher_data.department is not None:
             teacher.department = teacher_data.department
+        if teacher_data.dynamic_data is not None:
+            teacher.dynamic_data = teacher_data.dynamic_data
         
         # Admin-only fields
         if current_user.role == UserRole.ADMIN:
@@ -521,4 +580,36 @@ async def get_teacher_subjects(
         "teacher_id": teacher_id,
         "subjects": subject_list,
         "total_subjects": len(subject_list)
+    }
+
+from sqlalchemy import func
+from datetime import datetime, timedelta
+
+@router.get("/stats/headcount-trend", response_model=dict)
+async def get_headcount_trend(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get teacher headcount trend for the last 12 months"""
+    
+    # Calculate the date 12 months ago
+    twelve_months_ago = datetime.utcnow() - timedelta(days=365)
+    
+    # Query to get the count of teachers hired each month
+    trend = db.query(
+        func.strftime('%Y-%m', Teacher.hire_date).label('month'),
+        func.count(Teacher.id).label('count')
+    ).filter(
+        Teacher.hire_date >= twelve_months_ago
+    ).group_by(
+        func.strftime('%Y-%m', Teacher.hire_date)
+    ).order_by(
+        func.strftime('%Y-%m', Teacher.hire_date)
+    ).all()
+    
+    return {
+        "trend": [
+            {"month": month, "count": count}
+            for month, count in trend
+        ]
     }

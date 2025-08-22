@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Change to the script's directory to ensure relative paths work correctly
+cd "$(dirname "$0")"
+
 # E-School Management Platform - Backend Startup Script
 # Run this script from the backend directory
 

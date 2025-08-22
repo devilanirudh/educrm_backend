@@ -2,10 +2,12 @@
 Student-related database models
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, Date, Table
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, Date, Table, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.session import Base
+from app.models.financial import Invoice
+from app.models.library import BookIssue, LibraryMember
 import enum
 
 
@@ -39,12 +41,15 @@ class Student(Base):
     allergies = Column(Text, nullable=True)
     medical_conditions = Column(Text, nullable=True)
     transportation_mode = Column(String(50), nullable=True)  # bus, car, walk, etc.
-    bus_route_id = Column(Integer, ForeignKey("bus_routes.id"), nullable=True)
+    bus_route_id = Column(Integer, ForeignKey("routes.id"), nullable=True)
     
     # Hostel Information
     hostel_room_id = Column(Integer, ForeignKey("hostel_rooms.id"), nullable=True)
     is_hosteller = Column(Boolean, default=False, nullable=False)
     
+    # Dynamic data from form builder
+    dynamic_data = Column(JSON, nullable=True)
+
     # Academic Status
     is_active = Column(Boolean, default=True, nullable=False)
     graduation_date = Column(Date, nullable=True)
@@ -73,13 +78,12 @@ class Student(Base):
     exam_results = relationship("ExamResult", back_populates="student", cascade="all, delete-orphan")
     
     # Financial relationships
-    fee_payments = relationship("FeePayment", back_populates="student", cascade="all, delete-orphan")
+    fee_payments = relationship("Invoice", back_populates="student", cascade="all, delete-orphan")
     
     # Library relationships
-    library_transactions = relationship("LibraryTransaction", back_populates="student", cascade="all, delete-orphan")
     
     # Transport relationships
-    bus_route = relationship("BusRoute", foreign_keys=[bus_route_id])
+    bus_route = relationship("Route", foreign_keys=[bus_route_id])
     
     # Hostel relationships
     hostel_room = relationship("HostelRoom", foreign_keys=[hostel_room_id])
