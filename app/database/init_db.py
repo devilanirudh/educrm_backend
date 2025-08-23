@@ -9,13 +9,15 @@ from app.core.permissions import UserRole
 from app.models.user import User, Parent
 from app.models.student import Student
 from app.models.teacher import Teacher
-from app.models.academic import Subject, Class, ClassSubject
+from app.models.academic import Subject, Class, ClassSubject, Assignment, Exam, ExamQuestion, ExamResult, ExamAnswer, AssignmentSubmission
+from app.models.exam import ExamTerm, DateSheet, DateSheetEntry
 from app.models.financial import FeeStructure, FeeType
 from app.models.content import CMSPage, NewsArticle
 from app.models.communication import Notification
 from app.models.transport import Route, Stop, Vehicle
 from app.models.library import Book, BookIssue
 from app.models.hostel import HostelBlock, HostelRoom, HostelAllocation
+from app.models.report_card import ReportCardTemplate, ReportCard
 import logging
 from datetime import date, datetime
 

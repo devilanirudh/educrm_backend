@@ -100,6 +100,10 @@ class TeacherUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
     dynamic_data: Optional[dict] = None
 
+class TeacherDynamicCreateRequest(BaseModel):
+    """Schema for creating a teacher from dynamic form data"""
+    dynamic_data: dict
+
 # Teacher CRUD Operations
 @router.get("", response_model=dict)
 async def list_teachers(
@@ -135,12 +139,16 @@ async def list_teachers(
             Teacher.employee_id.ilike(f"%{search}%")
         )
         query = query.filter(search_filter)
-    
+
     if department:
         query = query.filter(Teacher.department.ilike(f"%{department}%"))
-    
+
+    # Default to showing only active teachers unless explicitly requested otherwise
     if is_active is not None:
         query = query.filter(Teacher.is_active == is_active)
+    else:
+        # By default, only show active teachers
+        query = query.filter(Teacher.is_active == True)
 
     # Apply dynamic filters
     if filters:
@@ -591,10 +599,10 @@ async def get_headcount_trend(
     current_user: User = Depends(get_current_user)
 ):
     """Get teacher headcount trend for the last 12 months"""
-    
+
     # Calculate the date 12 months ago
     twelve_months_ago = datetime.utcnow() - timedelta(days=365)
-    
+
     # Query to get the count of teachers hired each month
     trend = db.query(
         func.strftime('%Y-%m', Teacher.hire_date).label('month'),
@@ -606,10 +614,169 @@ async def get_headcount_trend(
     ).order_by(
         func.strftime('%Y-%m', Teacher.hire_date)
     ).all()
-    
+
     return {
         "trend": [
             {"month": month, "count": count}
             for month, count in trend
         ]
     }
+
+@router.post("/dynamic", response_model=dict)
+async def create_teacher_from_dynamic_form(
+    teacher_data: TeacherDynamicCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Create a new teacher from dynamic form data"""
+
+    # Log the incoming data for debugging
+    logger.info(f"Creating teacher from dynamic form with data: {teacher_data.dynamic_data}")
+
+    # Check if current user has permission (admin only)
+    if current_user.role not in [UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can create teachers"
+        )
+
+    try:
+        # Extract required fields from dynamic data
+        employee_id = teacher_data.dynamic_data.get('employee_id')
+        hire_date_str = teacher_data.dynamic_data.get('hire_date')
+        employment_type = teacher_data.dynamic_data.get('employment_type')
+        email = teacher_data.dynamic_data.get('email')
+        password = teacher_data.dynamic_data.get('password')
+        first_name = teacher_data.dynamic_data.get('first_name')
+        last_name = teacher_data.dynamic_data.get('last_name')
+
+        if not employee_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employee ID is required"
+            )
+
+        if not hire_date_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Hire date is required"
+            )
+
+        if not employment_type:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employment type is required"
+            )
+
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is required"
+            )
+
+        if not password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password is required"
+            )
+
+        if not first_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="First name is required"
+            )
+
+        if not last_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Last name is required"
+            )
+
+        # Parse hire date
+        try:
+            hire_date = datetime.strptime(hire_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid hire date format. Use YYYY-MM-DD"
+            )
+
+        # Check if employee_id already exists
+        existing_teacher = db.query(Teacher).filter(Teacher.employee_id == employee_id).first()
+        if existing_teacher:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employee ID already exists"
+            )
+
+        # Check if email already exists
+        existing_user = db.query(User).filter(User.email == email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+
+        # Create user account
+        auth_service = AuthService(db)
+        user = auth_service.create_user(
+            email=email,
+            username=teacher_data.dynamic_data.get('username'),
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            phone=teacher_data.dynamic_data.get('phone'),
+            role=UserRole.TEACHER,
+            date_of_birth=teacher_data.dynamic_data.get('date_of_birth'),
+            gender=teacher_data.dynamic_data.get('gender'),
+            address=teacher_data.dynamic_data.get('address'),
+            city=teacher_data.dynamic_data.get('city'),
+            state=teacher_data.dynamic_data.get('state'),
+            country=teacher_data.dynamic_data.get('country'),
+            postal_code=teacher_data.dynamic_data.get('postal_code')
+        )
+
+        # Create teacher record
+        teacher = Teacher(
+            user_id=user.id,
+            employee_id=employee_id,
+            qualifications=teacher_data.dynamic_data.get('qualifications'),
+            experience=teacher_data.dynamic_data.get('experience'),
+            specialization=teacher_data.dynamic_data.get('specialization'),
+            hire_date=hire_date,
+            employment_type=employment_type,
+            salary=teacher_data.dynamic_data.get('salary'),
+            department=teacher_data.dynamic_data.get('department'),
+            dynamic_data=teacher_data.dynamic_data
+        )
+
+        db.add(teacher)
+        db.commit()
+        db.refresh(teacher)
+
+        logger.info(f"Teacher {teacher.employee_id} created from dynamic form by {current_user.email}")
+
+        return {
+            "message": "Teacher created successfully",
+            "teacher": {
+                "id": teacher.id,
+                "employee_id": teacher.employee_id,
+                "user": {
+                    "id": teacher.user.id,
+                    "email": teacher.user.email,
+                    "first_name": teacher.user.first_name,
+                    "last_name": teacher.user.last_name,
+                    "phone": teacher.user.phone,
+                }
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating teacher from dynamic form: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create teacher"
+        )

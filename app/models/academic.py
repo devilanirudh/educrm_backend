@@ -55,6 +55,9 @@ class Class(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
+    # Dynamic data for form builder
+    dynamic_data = Column(JSON, nullable=True)
+    
     # Relationships
     class_teacher = relationship("Teacher", foreign_keys=[class_teacher_id])
     teachers = relationship("Teacher", secondary="teacher_class_associations", back_populates="classes")
@@ -243,6 +246,9 @@ class Exam(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Dynamic data for form builder
+    dynamic_data = Column(JSON, nullable=True)
     
     # Relationships
     class_info = relationship("Class", back_populates="exams")

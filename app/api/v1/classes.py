@@ -1,347 +1,500 @@
-"""Class management API endpoints"""
-from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
+"""
+Class management API endpoints
+"""
 
+from typing import Any, List, Optional
+from datetime import date, datetime
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, or_, func
 from app.database.session import get_db
-from app.models.academic import Class, ClassSubject, Subject
-from app.models.student import Student
-from app.models.teacher import Teacher
-from app.schemas.classes import (
-    ClassCreate, 
-    ClassUpdate, 
-    ClassResponse, 
-    ClassListResponse,
-    ClassSubjectCreate,
-    ClassSubjectResponse
-)
 from app.api.deps import get_current_user
 from app.core.permissions import UserRole
 from app.models.user import User
+from app.models.academic import Class
+from app.models.form import Form, FieldType
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.get("", response_model=ClassListResponse)
-async def get_classes(
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(10, ge=1, le=100, description="Number of records to return"),
-    session: Optional[str] = Query(None, description="Filter by session"),
-    medium: Optional[str] = Query(None, description="Filter by medium"),
+def validate_dynamic_data(db: Session, dynamic_data: dict):
+    """Validate dynamic data against the class_form schema"""
+    class_form = db.query(Form).filter(Form.key == "class_form").first()
+    if not class_form:
+        raise HTTPException(status_code=404, detail="Class form schema not found")
+
+    errors = {}
+    for field in class_form.fields:
+        if field.is_required and field.field_name not in dynamic_data:
+            errors[field.field_name] = "This field is required"
+
+        if field.field_name in dynamic_data:
+            value = dynamic_data[field.field_name]
+            if field.field_type == FieldType.NUMBER and not isinstance(value, (int, float)):
+                errors[field.field_name] = "Must be a number"
+            elif field.field_type == FieldType.DATE:
+                try:
+                    datetime.strptime(value, "%Y-%m-%d")
+                except ValueError:
+                    errors[field.field_name] = "Invalid date format. Use YYYY-MM-DD"
+
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"errors": errors}
+        )
+
+# Pydantic schemas for Class API
+from pydantic import BaseModel, EmailStr
+
+class ClassCreateRequest(BaseModel):
+    """Schema for creating a new class"""
+    name: str
+    section: str
+    stream: Optional[str] = None
+    grade_level: int
+    academic_year: str
+    max_students: Optional[int] = None
+    room_number: Optional[str] = None
+    class_teacher_id: Optional[int] = None
+    dynamic_data: Optional[dict] = None
+
+class ClassUpdateRequest(BaseModel):
+    """Schema for updating class information"""
+    name: Optional[str] = None
+    section: Optional[str] = None
+    stream: Optional[str] = None
+    grade_level: Optional[int] = None
+    academic_year: Optional[str] = None
+    max_students: Optional[int] = None
+    room_number: Optional[str] = None
+    class_teacher_id: Optional[int] = None
+    is_active: Optional[bool] = None
+    dynamic_data: Optional[dict] = None
+
+class ClassDynamicCreateRequest(BaseModel):
+    """Schema for creating a class from dynamic form data"""
+    dynamic_data: dict
+
+# Class CRUD Operations
+@router.get("", response_model=dict)
+async def list_classes(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None, description="Search by name, section, or stream"),
+    grade_level: Optional[int] = Query(None, description="Filter by grade level"),
+    section: Optional[str] = Query(None, description="Filter by section"),
+    stream: Optional[str] = Query(None, description="Filter by stream"),
+    academic_year: Optional[str] = Query(None, description="Filter by academic year"),
     class_teacher_id: Optional[int] = Query(None, description="Filter by class teacher"),
-    capacity_min: Optional[int] = Query(None, description="Minimum capacity"),
-    capacity_max: Optional[int] = Query(None, description="Maximum capacity"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    filters: Optional[str] = Query(None, description="Dynamic filters based on form schema"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
-    """Get all classes with pagination and filtering"""
-    query = db.query(Class)
-    
-    # Apply filters
-    if session:
-        query = query.filter(Class.academic_year == session)
-    
-    if medium:
-        # Assuming medium is stored in the description or a new field
-        query = query.filter(Class.description.ilike(f"%{medium}%"))
+) -> Any:
+    """List all classes with filtering and pagination"""
+
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF, UserRole.TEACHER]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # Base query with joins
+    query = db.query(Class).options(
+        joinedload(Class.class_teacher)
+    )
+
+    # Apply static filters
+    if search:
+        search_filter = or_(
+            Class.name.ilike(f"%{search}%"),
+            Class.section.ilike(f"%{search}%"),
+            Class.stream.ilike(f"%{search}%")
+        )
+        query = query.filter(search_filter)
+
+    if grade_level:
+        query = query.filter(Class.grade_level == grade_level)
+
+    if section:
+        query = query.filter(Class.section.ilike(f"%{section}%"))
+
+    if stream:
+        query = query.filter(Class.stream.ilike(f"%{stream}%"))
+
+    if academic_year:
+        query = query.filter(Class.academic_year == academic_year)
 
     if class_teacher_id:
         query = query.filter(Class.class_teacher_id == class_teacher_id)
 
-    if capacity_min is not None:
-        query = query.filter(Class.max_students >= capacity_min)
+    # Default to showing only active classes unless explicitly requested otherwise
+    if is_active is not None:
+        query = query.filter(Class.is_active == is_active)
+    else:
+        # By default, only show active classes
+        query = query.filter(Class.is_active == True)
 
-    if capacity_max is not None:
-        query = query.filter(Class.max_students <= capacity_max)
-    
+    # Apply dynamic filters
+    if filters:
+        try:
+            class_form = db.query(Form).filter(Form.key == "class_form").first()
+            if class_form:
+                for field in class_form.fields:
+                    if field.is_filterable and field.field_name in filters:
+                        value = filters[field.field_name]
+                        if value:
+                            query = query.filter(Class.dynamic_data[field.field_name].astext == str(value))
+        except Exception as e:
+            logger.error(f"Error applying dynamic filters: {e}")
+
     # Get total count
     total = query.count()
-    
+
     # Apply pagination
     classes = query.offset(skip).limit(limit).all()
-    
+
+    # Format response
+    class_list = []
+    for class_item in classes:
+        class_data = {
+            "id": class_item.id,
+            "name": class_item.name,
+            "section": class_item.section,
+            "stream": class_item.stream,
+            "grade_level": class_item.grade_level,
+            "academic_year": class_item.academic_year,
+            "max_students": class_item.max_students,
+            "room_number": class_item.room_number,
+            "is_active": class_item.is_active,
+            "created_at": class_item.created_at,
+            "class_teacher": {
+                "id": class_item.class_teacher.id,
+                "first_name": class_item.class_teacher.user.first_name,
+                "last_name": class_item.class_teacher.user.last_name,
+            } if class_item.class_teacher and class_item.class_teacher.user else None,
+            "dynamic_data": class_item.dynamic_data
+        }
+        class_list.append(class_data)
+
     return {
-        "data": classes,
+        "classes": class_list,
         "total": total,
-        "skip": skip,
-        "limit": limit
+        "page": skip // limit + 1,
+        "pages": (total + limit - 1) // limit,
+        "has_next": skip + limit < total,
+        "has_prev": skip > 0
     }
 
-@router.get("/{class_id}", response_model=ClassResponse)
+@router.post("", response_model=dict)
+async def create_class(
+    class_data: ClassCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Create a new class"""
+
+    # Check if current user has permission (admin or staff)
+    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators and staff can create classes"
+        )
+
+    try:
+        # Validate dynamic data
+        if class_data.dynamic_data:
+            validate_dynamic_data(db, class_data.dynamic_data)
+
+        # Check if class name already exists for the same academic year
+        existing_class = db.query(Class).filter(
+            Class.name == class_data.name,
+            Class.academic_year == class_data.academic_year
+        ).first()
+        if existing_class:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Class name already exists for this academic year"
+            )
+
+        # Create class record
+        class_obj = Class(
+            name=class_data.name,
+            section=class_data.section,
+            stream=class_data.stream,
+            grade_level=class_data.grade_level,
+            academic_year=class_data.academic_year,
+            max_students=class_data.max_students,
+            room_number=class_data.room_number,
+            class_teacher_id=class_data.class_teacher_id,
+            dynamic_data=class_data.dynamic_data
+        )
+
+        db.add(class_obj)
+        db.commit()
+        db.refresh(class_obj)
+
+        logger.info(f"Class {class_obj.name} created by {current_user.email}")
+
+        return {
+            "message": "Class created successfully",
+            "class_id": class_obj.id,
+            "class_name": class_obj.name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating class: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create class"
+        )
+
+@router.post("/dynamic", response_model=dict)
+async def create_class_from_dynamic_form(
+    class_data: ClassDynamicCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Create a new class from dynamic form data"""
+
+    # Log the incoming data for debugging
+    logger.info(f"Creating class from dynamic form with data: {class_data.dynamic_data}")
+
+    # Check if current user has permission (admin or staff)
+    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators and staff can create classes"
+        )
+
+    try:
+        # Extract required fields from dynamic data
+        name = class_data.dynamic_data.get('name')
+        section = class_data.dynamic_data.get('section')
+        grade_level = class_data.dynamic_data.get('grade_level')
+        academic_year = class_data.dynamic_data.get('academic_year')
+
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Class name is required"
+            )
+
+        if not section:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Section is required"
+            )
+
+        if not grade_level:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Grade level is required"
+            )
+
+        if not academic_year:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Academic year is required"
+            )
+
+        # Check if class name already exists for the same academic year
+        existing_class = db.query(Class).filter(
+            Class.name == name,
+            Class.academic_year == academic_year
+        ).first()
+        if existing_class:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Class name already exists for this academic year"
+            )
+
+        # Create class record
+        class_obj = Class(
+            name=name,
+            section=section,
+            stream=class_data.dynamic_data.get('stream'),
+            grade_level=grade_level,
+            academic_year=academic_year,
+            max_students=class_data.dynamic_data.get('max_students'),
+            room_number=class_data.dynamic_data.get('room_number'),
+            class_teacher_id=class_data.dynamic_data.get('class_teacher_id'),
+            dynamic_data=class_data.dynamic_data
+        )
+
+        db.add(class_obj)
+        db.commit()
+        db.refresh(class_obj)
+
+        logger.info(f"Class {class_obj.name} created from dynamic form by {current_user.email}")
+
+        return {
+            "message": "Class created successfully",
+            "class": {
+                "id": class_obj.id,
+                "name": class_obj.name,
+                "section": class_obj.section,
+                "grade_level": class_obj.grade_level,
+                "academic_year": class_obj.academic_year
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating class from dynamic form: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create class"
+        )
+
+@router.get("/{class_id}", response_model=dict)
 async def get_class(
     class_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
-    """Get a specific class by ID"""
-    class_obj = db.query(Class).filter(Class.id == class_id).first()
+) -> Any:
+    """Get class by ID with detailed information"""
+
+    class_obj = db.query(Class).options(
+        joinedload(Class.class_teacher)
+    ).filter(Class.id == class_id).first()
+
     if not class_obj:
-        raise HTTPException(status_code=404, detail="Class not found")
-    
-    return class_obj
-
-@router.post("", response_model=ClassResponse)
-async def create_class(
-    class_data: ClassCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Create a new class"""
-    # Check permissions
-    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
-        if current_user.role == UserRole.TEACHER:
-            teacher = db.query(Teacher).filter(Teacher.user_id == current_user.id).first()
-            if not teacher or not teacher.can_create_class:
-                raise HTTPException(status_code=403, detail="Insufficient permissions")
-        else:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    # Check if class already exists
-    existing_class = db.query(Class).filter(
-        and_(
-            Class.name == class_data.name,
-            Class.section == class_data.section,
-            Class.academic_year == class_data.academic_year
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Class not found"
         )
-    ).first()
-    
-    if existing_class:
-        raise HTTPException(status_code=400, detail="Class already exists")
-    
-    class_obj = Class(**class_data.dict())
-    db.add(class_obj)
-    db.commit()
-    db.refresh(class_obj)
-    
-    return class_obj
 
-@router.put("/{class_id}", response_model=ClassResponse)
+    return {
+        "id": class_obj.id,
+        "name": class_obj.name,
+        "section": class_obj.section,
+        "stream": class_obj.stream,
+        "grade_level": class_obj.grade_level,
+        "academic_year": class_obj.academic_year,
+        "max_students": class_obj.max_students,
+        "room_number": class_obj.room_number,
+        "is_active": class_obj.is_active,
+        "created_at": class_obj.created_at,
+        "updated_at": class_obj.updated_at,
+        "class_teacher": {
+            "id": class_obj.class_teacher.id,
+            "first_name": class_obj.class_teacher.user.first_name,
+            "last_name": class_obj.class_teacher.user.last_name,
+        } if class_obj.class_teacher and class_obj.class_teacher.user else None,
+        "dynamic_data": class_obj.dynamic_data
+    }
+
+@router.put("/{class_id}", response_model=dict)
 async def update_class(
     class_id: int,
-    class_data: ClassUpdate,
+    class_data: ClassUpdateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
-    """Update a class"""
-    # Check permissions
-    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    class_obj = db.query(Class).filter(Class.id == class_id).first()
-    if not class_obj:
-        raise HTTPException(status_code=404, detail="Class not found")
-    
-    # Update fields
-    for field, value in class_data.dict(exclude_unset=True).items():
-        setattr(class_obj, field, value)
-    
-    db.commit()
-    db.refresh(class_obj)
-    
-    return class_obj
-
-@router.delete("/{class_id}")
-async def archive_restore_class(
-    class_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Archive or restore a class"""
-    # Check permissions
-    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    class_obj = db.query(Class).filter(Class.id == class_id).first()
-    if not class_obj:
-        raise HTTPException(status_code=404, detail="Class not found")
-    
-    class_obj.is_active = not class_obj.is_active
-    db.commit()
-    db.refresh(class_obj)
-    
-    message = "Class archived successfully" if not class_obj.is_active else "Class restored successfully"
-    return {"message": message, "class": class_obj}
-
-@router.get("/{class_id}/students", response_model=Dict[str, Any])
-async def get_class_students(
-    class_id: int,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get students enrolled in a class"""
-    class_obj = db.query(Class).filter(Class.id == class_id).first()
-    if not class_obj:
-        raise HTTPException(status_code=404, detail="Class not found")
-    
-    students = db.query(Student).filter(
-        Student.current_class_id == class_id
-    ).offset(skip).limit(limit).all()
-    
-    total = db.query(Student).filter(Student.current_class_id == class_id).count()
-    
-    return {
-        "data": students,
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
-
-@router.get("/{class_id}/subjects", response_model=List[ClassSubjectResponse])
-async def get_class_subjects(
-    class_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get subjects assigned to a class"""
-    class_obj = db.query(Class).filter(Class.id == class_id).first()
-    if not class_obj:
-        raise HTTPException(status_code=404, detail="Class not found")
-    
-    class_subjects = db.query(ClassSubject).filter(
-        ClassSubject.class_id == class_id
-    ).all()
-    
-    return class_subjects
-
-@router.post("/{class_id}/assign-subjects", response_model=List[ClassSubjectResponse])
-async def assign_subjects_to_class(
-    class_id: int,
-    subjects_data: List[ClassSubjectCreate],
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Assign subjects and teachers to a class"""
-    # Check permissions
-    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+) -> Any:
+    """Update class information"""
 
     class_obj = db.query(Class).filter(Class.id == class_id).first()
     if not class_obj:
-        raise HTTPException(status_code=404, detail="Class not found")
-
-    # Clear existing subjects for this class
-    db.query(ClassSubject).filter(ClassSubject.class_id == class_id).delete()
-
-    created_subjects = []
-    for subject_data in subjects_data:
-        # Check if subject exists
-        subject = db.query(Subject).filter(Subject.id == subject_data.subject_id).first()
-        if not subject:
-            raise HTTPException(status_code=404, detail=f"Subject with id {subject_data.subject_id} not found")
-
-        # Check if teacher exists
-        if subject_data.teacher_id:
-            teacher = db.query(Teacher).filter(Teacher.id == subject_data.teacher_id).first()
-            if not teacher:
-                raise HTTPException(status_code=404, detail=f"Teacher with id {subject_data.teacher_id} not found")
-
-        class_subject = ClassSubject(
-            class_id=class_id,
-            **subject_data.dict()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Class not found"
         )
-        db.add(class_subject)
-        created_subjects.append(class_subject)
 
-    db.commit()
-    for subject in created_subjects:
-        db.refresh(subject)
-
-    return created_subjects
-
-@router.delete("/{class_id}/subjects/{subject_id}")
-async def remove_subject_from_class(
-    class_id: int,
-    subject_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Remove a subject from a class"""
-    # Check permissions
-    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    class_subject = db.query(ClassSubject).filter(
-        and_(
-            ClassSubject.class_id == class_id,
-            ClassSubject.subject_id == subject_id
+    # Check permissions - admin or staff can update
+    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
         )
-    ).first()
-    
-    if not class_subject:
-        raise HTTPException(status_code=404, detail="Subject not found in this class")
-    
-    db.delete(class_subject)
-    db.commit()
-    
-    return {"message": "Subject removed from class successfully"}
 
-@router.get("/{class_id}/teachers", response_model=List[Dict[str, Any]])
-async def get_class_teachers(
+    try:
+        # Validate dynamic data
+        if class_data.dynamic_data:
+            validate_dynamic_data(db, class_data.dynamic_data)
+
+        # Update class information
+        if class_data.name is not None:
+            class_obj.name = class_data.name
+        if class_data.section is not None:
+            class_obj.section = class_data.section
+        if class_data.stream is not None:
+            class_obj.stream = class_data.stream
+        if class_data.grade_level is not None:
+            class_obj.grade_level = class_data.grade_level
+        if class_data.academic_year is not None:
+            class_obj.academic_year = class_data.academic_year
+        if class_data.max_students is not None:
+            class_obj.max_students = class_data.max_students
+        if class_data.room_number is not None:
+            class_obj.room_number = class_data.room_number
+        if class_data.class_teacher_id is not None:
+            class_obj.class_teacher_id = class_data.class_teacher_id
+        if class_data.dynamic_data is not None:
+            class_obj.dynamic_data = class_data.dynamic_data
+
+        # Admin-only fields
+        if current_user.role == UserRole.ADMIN:
+            if class_data.is_active is not None:
+                class_obj.is_active = class_data.is_active
+
+        db.commit()
+
+        logger.info(f"Class {class_obj.name} updated by {current_user.email}")
+
+        return {"message": "Class updated successfully"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating class: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update class"
+        )
+
+@router.delete("/{class_id}", response_model=dict)
+async def delete_class(
     class_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
-    """Get teachers assigned to a class"""
+) -> Any:
+    """Soft delete a class (deactivate)"""
+
+    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators and staff can delete classes"
+        )
+
     class_obj = db.query(Class).filter(Class.id == class_id).first()
     if not class_obj:
-        raise HTTPException(status_code=404, detail="Class not found")
-    
-    # Get class teacher
-    class_teacher = None
-    if class_obj.class_teacher_id:
-        class_teacher = db.query(Teacher).filter(Teacher.id == class_obj.class_teacher_id).first()
-    
-    # Get subject teachers
-    subject_teachers = db.query(Teacher).join(ClassSubject).filter(
-        ClassSubject.class_id == class_id
-    ).distinct().all()
-    
-    return {
-        "class_teacher": class_teacher,
-        "subject_teachers": subject_teachers
-    }
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Class not found"
+        )
 
-@router.get("/stats/overview", response_model=Dict[str, Any])
-async def get_classes_overview(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get classes statistics overview"""
-    total_classes = db.query(Class).count()
-    active_classes = db.query(Class).filter(Class.is_active == True).count()
-    total_students = db.query(Student).count()
-    
-    # Classes by grade level
-    grade_distribution = db.query(
-        Class.grade_level,
-        func.count(Class.id).label('count')
-    ).group_by(Class.grade_level).all()
-    
-    return {
-        "total_classes": total_classes,
-        "active_classes": active_classes,
-        "total_students": total_students,
-        "grade_distribution": [
-            {"grade_level": grade, "count": count} 
-            for grade, count in grade_distribution
-        ]
-    }
+    try:
+        # Soft delete - deactivate instead of removing
+        class_obj.is_active = False
 
-@router.get("/stats/students-by-class", response_model=List[Dict[str, Any]])
-async def get_students_by_class(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get the number of students per class"""
-    
-    class_student_counts = db.query(
-        Class.name,
-        func.count(Student.id).label('student_count')
-    ).join(Student, Student.current_class_id == Class.id).group_by(Class.name).all()
-    
-    return [
-        {"name": name, "students": count}
-        for name, count in class_student_counts
-    ]
+        db.commit()
+
+        logger.info(f"Class {class_obj.name} deactivated by {current_user.email}")
+
+        return {"message": "Class deactivated successfully"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deactivating class: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to deactivate class"
+        )

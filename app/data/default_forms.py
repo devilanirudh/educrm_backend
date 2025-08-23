@@ -441,10 +441,463 @@ DEFAULT_TEACHER_FORM = {
     ]
 }
 
+# Default class form based on Class schema
+DEFAULT_CLASS_FORM = {
+    "name": "Class Registration Form",
+    "key": "class_form",
+    "description": "Default form for class registration and management",
+    "entityType": "class",
+    "fields": [
+        {
+            "id": "name",
+            "field_type": FieldType.TEXT,
+            "label": "Class Name",
+            "field_name": "name",
+            "placeholder": "Enter class name",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "minLength": 1,
+                "maxLength": 50
+            }
+        },
+        {
+            "id": "section",
+            "field_type": FieldType.TEXT,
+            "label": "Section",
+            "field_name": "section",
+            "placeholder": "Enter section (e.g., A, B, C)",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False,
+                "maxLength": 10
+            }
+        },
+        {
+            "id": "stream",
+            "field_type": FieldType.SELECT,
+            "label": "Stream",
+            "field_name": "stream",
+            "placeholder": "Select stream",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False
+            },
+            "options": [
+                {"id": "1", "label": "Science", "value": "science"},
+                {"id": "2", "label": "Commerce", "value": "commerce"},
+                {"id": "3", "label": "Arts", "value": "arts"},
+                {"id": "4", "label": "General", "value": "general"}
+            ]
+        },
+        {
+            "id": "grade_level",
+            "field_type": FieldType.NUMBER,
+            "label": "Grade Level",
+            "field_name": "grade_level",
+            "placeholder": "Enter grade level (1-12)",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "min": 1,
+                "max": 12
+            }
+        },
+        {
+            "id": "academic_year",
+            "field_type": FieldType.TEXT,
+            "label": "Academic Year",
+            "field_name": "academic_year",
+            "placeholder": "e.g., 2023-2024",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "pattern": r"^\d{4}-\d{4}$"
+            }
+        },
+        {
+            "id": "max_students",
+            "field_type": FieldType.NUMBER,
+            "label": "Maximum Students",
+            "field_name": "max_students",
+            "placeholder": "Enter maximum number of students",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False,
+                "min": 1,
+                "max": 100
+            }
+        },
+        {
+            "id": "room_number",
+            "field_type": FieldType.TEXT,
+            "label": "Room Number",
+            "field_name": "room_number",
+            "placeholder": "Enter room number",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False,
+                "maxLength": 20
+            }
+        },
+        {
+            "id": "class_teacher_id",
+            "field_type": FieldType.NUMBER,
+            "label": "Class Teacher ID",
+            "field_name": "class_teacher_id",
+            "placeholder": "Enter class teacher ID",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False,
+                "min": 1
+            }
+        }
+    ]
+}
+
+# Default assignment form based on Assignment schema
+DEFAULT_ASSIGNMENT_FORM = {
+    "name": "Assignment Form",
+    "key": "assignment_form",
+    "description": "Default form for assignment creation and management",
+    "entityType": "assignment",
+    "fields": [
+        {
+            "id": "title",
+            "field_type": FieldType.TEXT,
+            "label": "Assignment Title",
+            "field_name": "title",
+            "placeholder": "Enter assignment title",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "minLength": 1,
+                "maxLength": 200
+            }
+        },
+        {
+            "id": "description",
+            "field_type": FieldType.TEXTAREA,
+            "label": "Description",
+            "field_name": "description",
+            "placeholder": "Enter assignment description",
+            "is_required": False,
+            "is_filterable": False,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False,
+                "maxLength": 1000
+            }
+        },
+        {
+            "id": "class_id",
+            "field_type": FieldType.NUMBER,
+            "label": "Class ID",
+            "field_name": "class_id",
+            "placeholder": "Enter class ID",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": True,
+                "min": 1
+            }
+        },
+        {
+            "id": "subject_id",
+            "field_type": FieldType.NUMBER,
+            "label": "Subject ID",
+            "field_name": "subject_id",
+            "placeholder": "Enter subject ID",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": True,
+                "min": 1
+            }
+        },
+        {
+            "id": "teacher_id",
+            "field_type": FieldType.NUMBER,
+            "label": "Teacher ID",
+            "field_name": "teacher_id",
+            "placeholder": "Enter teacher ID",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": True,
+                "min": 1
+            }
+        },
+        {
+            "id": "due_date",
+            "field_type": FieldType.DATE,
+            "label": "Due Date",
+            "field_name": "due_date",
+            "placeholder": "Select due date",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            }
+        },
+        {
+            "id": "instructions",
+            "field_type": FieldType.TEXTAREA,
+            "label": "Instructions",
+            "field_name": "instructions",
+            "placeholder": "Enter assignment instructions",
+            "is_required": False,
+            "is_filterable": False,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False,
+                "maxLength": 2000
+            }
+        },
+        {
+            "id": "max_score",
+            "field_type": FieldType.NUMBER,
+            "label": "Maximum Score",
+            "field_name": "max_score",
+            "placeholder": "Enter maximum score",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False,
+                "min": 0,
+                "max": 100
+            }
+        },
+        {
+            "id": "is_published",
+            "field_type": FieldType.CHECKBOX,
+            "label": "Published",
+            "field_name": "is_published",
+            "placeholder": "",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False
+            }
+        }
+    ]
+}
+
+# Default exam form based on Exam schema
+DEFAULT_EXAM_FORM = {
+    "name": "Exam Form",
+    "key": "exam_form",
+    "description": "Default form for exam creation and management",
+    "entityType": "exam",
+    "fields": [
+        {
+            "id": "name",
+            "field_type": FieldType.TEXT,
+            "label": "Exam Name",
+            "field_name": "name",
+            "placeholder": "Enter exam name",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "minLength": 1,
+                "maxLength": 200
+            }
+        },
+        {
+            "id": "description",
+            "field_type": FieldType.TEXTAREA,
+            "label": "Description",
+            "field_name": "description",
+            "placeholder": "Enter exam description",
+            "is_required": False,
+            "is_filterable": False,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False,
+                "maxLength": 1000
+            }
+        },
+        {
+            "id": "exam_id",
+            "field_type": FieldType.TEXT,
+            "label": "Exam ID",
+            "field_name": "exam_id",
+            "placeholder": "Enter unique exam ID",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "minLength": 1,
+                "maxLength": 50
+            }
+        },
+        {
+            "id": "class_id",
+            "field_type": FieldType.NUMBER,
+            "label": "Class ID",
+            "field_name": "class_id",
+            "placeholder": "Enter class ID",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": True,
+                "min": 1
+            }
+        },
+        {
+            "id": "exam_date",
+            "field_type": FieldType.DATE,
+            "label": "Exam Date",
+            "field_name": "exam_date",
+            "placeholder": "Select exam date",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            }
+        },
+        {
+            "id": "start_time",
+            "field_type": FieldType.TEXT,
+            "label": "Start Time",
+            "field_name": "start_time",
+            "placeholder": "Enter start time (e.g., 09:00 AM)",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            }
+        },
+        {
+            "id": "end_time",
+            "field_type": FieldType.TEXT,
+            "label": "End Time",
+            "field_name": "end_time",
+            "placeholder": "Enter end time (e.g., 10:30 AM)",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            }
+        },
+        {
+            "id": "duration_minutes",
+            "field_type": FieldType.NUMBER,
+            "label": "Duration (Minutes)",
+            "field_name": "duration_minutes",
+            "placeholder": "Enter duration in minutes",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "min": 30,
+                "max": 480
+            }
+        },
+        {
+            "id": "total_marks",
+            "field_type": FieldType.NUMBER,
+            "label": "Total Marks",
+            "field_name": "total_marks",
+            "placeholder": "Enter total marks",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "min": 1,
+                "max": 1000
+            }
+        },
+        {
+            "id": "passing_marks",
+            "field_type": FieldType.NUMBER,
+            "label": "Passing Marks",
+            "field_name": "passing_marks",
+            "placeholder": "Enter passing marks",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False,
+                "min": 0
+            }
+        },
+        {
+            "id": "instructions",
+            "field_type": FieldType.TEXTAREA,
+            "label": "Instructions",
+            "field_name": "instructions",
+            "placeholder": "Enter exam instructions",
+            "is_required": False,
+            "is_filterable": False,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False,
+                "maxLength": 2000
+            }
+        },
+        {
+            "id": "status",
+            "field_type": FieldType.SELECT,
+            "label": "Status",
+            "field_name": "status",
+            "placeholder": "Select exam status",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            },
+            "options": [
+                {"id": "1", "label": "Upcoming", "value": "upcoming"},
+                {"id": "2", "label": "Ongoing", "value": "ongoing"},
+                {"id": "3", "label": "Completed", "value": "completed"},
+                {"id": "4", "label": "Cancelled", "value": "cancelled"}
+            ]
+        }
+    ]
+}
+
 # Dictionary mapping entity types to their default forms
 DEFAULT_FORMS: Dict[str, Dict[str, Any]] = {
     "student": DEFAULT_STUDENT_FORM,
     "teacher": DEFAULT_TEACHER_FORM,
+    "class": DEFAULT_CLASS_FORM,
+    "assignment": DEFAULT_ASSIGNMENT_FORM,
+    "exam": DEFAULT_EXAM_FORM,
     # Add more default forms for other entities here
 }
 

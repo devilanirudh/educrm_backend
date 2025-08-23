@@ -168,9 +168,13 @@ async def list_students(
     
     if academic_year:
         query = query.filter(Student.academic_year == academic_year)
-    
+
+    # Default to showing only active students unless explicitly requested otherwise
     if is_active is not None:
         query = query.filter(Student.is_active == is_active)
+    else:
+        # By default, only show active students
+        query = query.filter(Student.is_active == True)
 
     # Apply dynamic filters
     if filters:
