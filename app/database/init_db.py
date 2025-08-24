@@ -384,6 +384,22 @@ def init_db():
     logger.info("Initializing database...")
     
     try:
+        # Check if database file exists and has data
+        from pathlib import Path
+        from app.core.config import settings
+        
+        database_path = settings.DATABASE_URL.replace("duckdb:///", "").replace("sqlite:///", "")
+        if not database_path.startswith("./"):
+            database_path = f"./{database_path}"
+        
+        db_file = Path(database_path)
+        
+        if db_file.exists() and db_file.stat().st_size > 0:
+            logger.info("Database file exists and has data, skipping initialization")
+            # Still create tables if they don't exist (for schema updates)
+            create_tables()
+            return
+        
         # Create tables (only if they don't exist)
         create_tables()
         

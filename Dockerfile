@@ -31,6 +31,9 @@ COPY . .
 # Create uploads directory
 RUN mkdir -p uploads
 
+# Ensure database file permissions are correct
+RUN if [ -f eschool.db ]; then chmod 644 eschool.db; fi
+
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 RUN chown -R appuser:appuser /app

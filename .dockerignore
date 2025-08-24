@@ -51,9 +51,9 @@ docs/
 *.md
 
 # Database files (will be created at runtime)
-*.db
-*.sqlite
-*.sqlite3
+# *.db
+# *.sqlite
+# *.sqlite3
 
 # Logs
 logs/
