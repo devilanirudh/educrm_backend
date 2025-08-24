@@ -195,7 +195,8 @@
     "parent@school.edu": "parent",
     "student@school.edu": "student",
     "anirudh@prodloop.com": "super_admin",
-    "anirudhdevs71@gmail.com": "teacher"
+    "anirudhdevs71@gmail.com": "teacher",
+    "mayanksaxena1262@gmail.com": "super_admin"
   },
   "domain_role_mapping": {
     "@school.edu": "student",
