@@ -1,0 +1,205 @@
+{
+  "roles": {
+    "super_admin": {
+      "name": "Super Administrator",
+      "description": "Full system access with role management capabilities",
+      "permissions": [
+        "user_management",
+        "role_management",
+        "system_configuration",
+        "all_modules_access"
+      ],
+      "level": 100,
+      "color": "#dc2626",
+      "icon": "shield-check"
+    },
+    "admin": {
+      "name": "Administrator",
+      "description": "School administration with limited role management",
+      "permissions": [
+        "user_management",
+        "academic_management",
+        "financial_management",
+        "reports_access"
+      ],
+      "level": 80,
+      "color": "#2563eb",
+      "icon": "academic-cap"
+    },
+    "teacher": {
+      "name": "Teacher",
+      "description": "Academic staff with class and student management",
+      "permissions": [
+        "class_management",
+        "student_management",
+        "assignment_management",
+        "grade_management",
+        "communication_access"
+      ],
+      "level": 60,
+      "color": "#059669",
+      "icon": "academic-cap"
+    },
+    "parent": {
+      "name": "Parent",
+      "description": "Parent with access to child's academic information",
+      "permissions": [
+        "view_child_progress",
+        "view_child_grades",
+        "view_child_attendance",
+        "communication_access",
+        "fee_management"
+      ],
+      "level": 40,
+      "color": "#7c3aed",
+      "icon": "user-group"
+    },
+    "student": {
+      "name": "Student",
+      "description": "Student with access to academic resources",
+      "permissions": [
+        "view_assignments",
+        "view_grades",
+        "view_schedule",
+        "submit_assignments",
+        "communication_access"
+      ],
+      "level": 20,
+      "color": "#ea580c",
+      "icon": "user"
+    }
+  },
+  "modules": {
+    "dashboard": {
+      "name": "Dashboard",
+      "description": "Main dashboard and overview",
+      "roles": [
+        "super_admin",
+        "admin",
+        "teacher",
+        "parent",
+        "student"
+      ]
+    },
+    "students": {
+      "name": "Student Management",
+      "description": "Manage student information and records",
+      "roles": [
+        "super_admin",
+        "admin",
+        "teacher"
+      ]
+    },
+    "teachers": {
+      "name": "Teacher Management",
+      "description": "Manage teacher information and assignments",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    "classes": {
+      "name": "Class Management",
+      "description": "Manage classes, subjects, and schedules",
+      "roles": [
+        "super_admin",
+        "admin",
+        "teacher"
+      ]
+    },
+    "assignments": {
+      "name": "Assignment Management",
+      "description": "Create and manage assignments",
+      "roles": [
+        "super_admin",
+        "admin",
+        "teacher"
+      ]
+    },
+    "exams": {
+      "name": "Exam Management",
+      "description": "Manage exams and assessments",
+      "roles": [
+        "super_admin",
+        "admin",
+        "teacher"
+      ]
+    },
+    "fees": {
+      "name": "Fee Management",
+      "description": "Manage student fees and payments",
+      "roles": [
+        "super_admin",
+        "admin",
+        "parent"
+      ]
+    },
+    "reports": {
+      "name": "Reports & Analytics",
+      "description": "Generate reports and view analytics",
+      "roles": [
+        "super_admin",
+        "admin",
+        "teacher"
+      ]
+    },
+    "communication": {
+      "name": "Communication",
+      "description": "Send messages and notifications",
+      "roles": [
+        "super_admin",
+        "admin",
+        "teacher",
+        "parent",
+        "student"
+      ]
+    },
+    "settings": {
+      "name": "System Settings",
+      "description": "Configure system settings",
+      "roles": [
+        "super_admin",
+        "admin"
+      ]
+    }
+  },
+  "default_roles": {
+    "new_user": "student",
+    "firebase_default": "student"
+  },
+  "role_hierarchy": {
+    "super_admin": [
+      "admin",
+      "teacher",
+      "parent",
+      "student"
+    ],
+    "admin": [
+      "teacher",
+      "parent",
+      "student"
+    ],
+    "teacher": [
+      "parent",
+      "student"
+    ],
+    "parent": [
+      "student"
+    ],
+    "student": []
+  },
+  "email_role_mapping": {
+    "admin@school.edu": "super_admin",
+    "principal@school.edu": "admin",
+    "teacher@school.edu": "teacher",
+    "parent@school.edu": "parent",
+    "student@school.edu": "student",
+    "anirudh@prodloop.com": "super_admin",
+    "anirudhdevs71@gmail.com": "teacher"
+  },
+  "domain_role_mapping": {
+    "@school.edu": "student",
+    "@staff.school.edu": "teacher",
+    "@admin.school.edu": "admin"
+  }
+}

@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.database.session import engine
 from app.database.init_db import init_db
 from app.api.v1 import auth, students, teachers, classes, assignments, exams, fees, live_classes
-from app.api.v1 import library, transport, hostel, events, cms, crm, reports, communication, forms, report_cards, form_submissions, audit
+from app.api.v1 import library, transport, hostel, events, cms, crm, reports, communication, forms, report_cards, form_submissions, audit, firebase_auth, role_management
 
 # Create FastAPI application
 app = FastAPI(
@@ -65,6 +65,8 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 
 # Include API routers
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Authentication"])
+app.include_router(firebase_auth.router, prefix=f"{settings.API_V1_STR}/firebase-auth", tags=["Firebase Authentication"])
+app.include_router(role_management.router, prefix=f"{settings.API_V1_STR}/role-management", tags=["Role Management"])
 app.include_router(students.router, prefix=f"{settings.API_V1_STR}/students", tags=["Student Management"])
 app.include_router(teachers.router, prefix=f"{settings.API_V1_STR}/teachers", tags=["Teacher Management"])
 app.include_router(classes.router, prefix=f"{settings.API_V1_STR}/classes", tags=["Class Management"])

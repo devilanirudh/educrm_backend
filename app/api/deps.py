@@ -1,56 +1,164 @@
 """
-API dependency injection for authentication and authorization
+API dependency injection for Firebase authentication and authorization
 """
 
 from typing import Generator, Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database.session import get_db
-from app.core.security import verify_token
+from app.core.firebase_config import verify_firebase_token, get_user_by_uid, get_user_role
 from app.core.permissions import UserRole, Permission, check_permission
+from app.core.role_config import role_config
 from app.models.user import User
+import logging
 
-# JWT Bearer token security
-security = HTTPBearer()
+logger = logging.getLogger(__name__)
 
-def get_current_user(
-    db: Session = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+# Custom security dependency that handles OPTIONS requests
+class OptionalHTTPBearer(HTTPBearer):
+    async def __call__(self, request: Request) -> Optional[HTTPAuthorizationCredentials]:
+        # Skip authentication for OPTIONS requests
+        if request.method == "OPTIONS":
+            return None
+        # For other requests, use normal HTTPBearer behavior
+        return await super().__call__(request)
+
+# HTTP Bearer token scheme
+security = OptionalHTTPBearer(auto_error=False)
+
+async def get_current_user_firebase(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db)
 ) -> User:
-    """
-    Get current authenticated user from JWT token
-    
-    Args:
-        db: Database session
-        credentials: JWT credentials from Authorization header
-    
-    Returns:
-        Current user object
-    
-    Raises:
-        HTTPException: If token is invalid or user not found
-    """
-    token = credentials.credentials
-    
-    # Verify token and get user ID
-    user_id = verify_token(token, "access")
-    
-    # Get user from database
-    user = db.query(User).filter(User.id == int(user_id)).first()
-    if not user:
+    """Get current authenticated user from Firebase token"""
+    if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
+            detail="Authentication credentials required"
         )
-    
-    if not user.is_active:
+
+    try:
+        token = credentials.credentials
+        logger.info(f"🔐 Processing Firebase token of length: {len(token)}")
+        
+        # Verify Firebase token
+        firebase_user = verify_firebase_token(token)
+        
+        if not firebase_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token"
+            )
+        
+        uid = firebase_user['uid']
+        email = firebase_user['email']
+        
+        logger.info(f"🔍 Firebase user verified: {email} (UID: {uid})")
+        
+        # Get or create user in database
+        user = db.query(User).filter(User.email == email).first()
+        
+        # Check if user has access based on role configuration
+        role_str = role_config.get_role_for_email(email)
+        
+        # If no role mapping found, deny access
+        if role_str == role_config.get_default_role('firebase_default'):
+            logger.warning(f"🚫 Access denied for email: {email} - No role mapping found")
+            logger.info(f"📧 Email: {email} is not in role configuration")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. Your email is not authorized to access this system. Please contact the administrator."
+            )
+        
+        if not user:
+            # Create new user from Firebase
+            logger.info(f"👤 Creating new user from Firebase: {email}")
+            
+            # Get role from email mapping or Firebase custom claims
+            email = firebase_user['email']
+            role_str = role_config.get_role_for_email(email)
+            
+            # If no email mapping, check Firebase custom claims
+            if role_str == role_config.get_default_role('firebase_default'):
+                role_str = firebase_user.get('role', role_str)
+            
+            try:
+                role = UserRole(role_str.lower())
+                logger.info(f"🎭 Assigned role '{role.value}' to email: {email}")
+            except ValueError:
+                logger.warning(f"⚠️ Invalid role '{role_str}', using default from config")
+                role = UserRole(role_config.get_default_role('firebase_default'))
+            
+            # Create user
+            user = User(
+                email=email,
+                first_name=firebase_user.get('name', '').split()[0] if firebase_user.get('name') else '',
+                last_name=' '.join(firebase_user.get('name', '').split()[1:]) if firebase_user.get('name') and len(firebase_user.get('name', '').split()) > 1 else '',
+                role=role,
+                is_active=True,
+                is_verified=firebase_user.get('email_verified', False),
+                firebase_uid=uid
+            )
+            
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            
+            logger.info(f"✅ Created new user: {user.id} ({email}) with role: {role.value}")
+        else:
+            # Update existing user with Firebase UID if not set
+            if not user.firebase_uid:
+                user.firebase_uid = uid
+                db.commit()
+                logger.info(f"✅ Updated existing user with Firebase UID: {uid}")
+            
+            # Update role from email mapping or Firebase if different
+            email = firebase_user['email']
+            firebase_role = role_config.get_role_for_email(email)
+            
+            # If no role mapping found, deny access
+            if firebase_role == role_config.get_default_role('firebase_default'):
+                logger.warning(f"🚫 Access denied for existing user: {email} - No role mapping found")
+                logger.info(f"📧 Email: {email} is not in role configuration")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied. Your email is not authorized to access this system. Please contact the administrator."
+                )
+            
+            # If no email mapping, check Firebase custom claims
+            if firebase_role == role_config.get_default_role('firebase_default'):
+                firebase_role = firebase_user.get('role', firebase_role)
+            try:
+                firebase_role_enum = UserRole(firebase_role.lower())
+                if user.role != firebase_role_enum:
+                    user.role = firebase_role_enum
+                    db.commit()
+                    logger.info(f"🔄 Updated user role from {user.role.value} to {firebase_role_enum.value}")
+            except ValueError:
+                logger.warning(f"⚠️ Invalid Firebase role '{firebase_role}', keeping existing role: {user.role.value}")
+        
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Inactive user"
+            )
+        
+        logger.info(f"✅ Successfully authenticated: {email} ({user.id}) with role: {user.role.value}")
+        return user
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 403 Forbidden) without modification
+        raise
+    except Exception as e:
+        logger.error(f"❌ Firebase authentication failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is inactive"
+            detail=f"Authentication failed: {str(e)}"
         )
-    
-    return user
+
+# Alias for backward compatibility
+get_current_user = get_current_user_firebase
 
 def get_current_active_user(
     current_user: User = Depends(get_current_user)
@@ -180,7 +288,7 @@ def get_optional_current_user(
     
     Args:
         db: Database session
-        credentials: Optional JWT credentials
+        credentials: Optional Firebase credentials
     
     Returns:
         Current user if authenticated, None otherwise
@@ -190,8 +298,14 @@ def get_optional_current_user(
     
     try:
         token = credentials.credentials
-        user_id = verify_token(token, "access")
-        user = db.query(User).filter(User.id == int(user_id)).first()
+        firebase_user = verify_firebase_token(token)
+        
+        if not firebase_user:
+            return None
+        
+        email = firebase_user['email']
+        user = db.query(User).filter(User.email == email).first()
+        
         if user and user.is_active:
             return user
     except:

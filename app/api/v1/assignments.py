@@ -10,6 +10,7 @@ from sqlalchemy import and_, or_, func
 from app.database.session import get_db
 from app.api.deps import get_current_user
 from app.core.permissions import UserRole
+from app.core.role_config import role_config
 from app.models.user import User
 from app.models.academic import Assignment
 from app.models.form import Form, FieldType
@@ -204,8 +205,8 @@ async def create_assignment(
 ) -> Any:
     """Create a new assignment"""
 
-    # Check if current user has permission (admin, staff, or teacher)
-    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF, UserRole.TEACHER]:
+    # Check if current user has permission to access assignments module
+    if not role_config.can_access_module(current_user.role.value, "assignments"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators, staff, and teachers can create assignments"
@@ -263,8 +264,8 @@ async def create_assignment_from_dynamic_form(
     # Log the incoming data for debugging
     logger.info(f"Creating assignment from dynamic form with data: {assignment_data.dynamic_data}")
 
-    # Check if current user has permission (admin, staff, or teacher)
-    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF, UserRole.TEACHER]:
+    # Check if current user has permission to access assignments module
+    if not role_config.can_access_module(current_user.role.value, "assignments"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators, staff, and teachers can create assignments"

@@ -10,6 +10,7 @@ from sqlalchemy import and_, or_, func
 from app.database.session import get_db
 from app.api.deps import get_current_user
 from app.core.permissions import UserRole
+from app.core.role_config import role_config
 from app.models.user import User
 from app.models.teacher import Teacher
 from app.models.academic import Class, Subject
@@ -118,11 +119,15 @@ async def list_teachers(
 ) -> Any:
     """List all teachers with filtering and pagination"""
     
-    # Check permissions
-    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+    # Check permissions using role configuration
+    logger.info(f"🔍 Checking access for role: {current_user.role.value} to module: teachers")
+    can_access = role_config.can_access_module(current_user.role.value, "teachers")
+    logger.info(f"🔍 Can access result: {can_access}")
+    
+    if not can_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            detail="Not enough permissions to access teachers module"
         )
     
     # Base query with joins
@@ -211,8 +216,8 @@ async def create_teacher(
 ) -> Any:
     """Create a new teacher"""
     
-    # Check if current user has permission (admin only)
-    if current_user.role not in [UserRole.ADMIN]:
+    # Check if current user has permission to access teachers module
+    if not role_config.can_access_module(current_user.role.value, "teachers"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can create teachers"
@@ -633,8 +638,8 @@ async def create_teacher_from_dynamic_form(
     # Log the incoming data for debugging
     logger.info(f"Creating teacher from dynamic form with data: {teacher_data.dynamic_data}")
 
-    # Check if current user has permission (admin only)
-    if current_user.role not in [UserRole.ADMIN]:
+    # Check if current user has permission to access teachers module
+    if not role_config.can_access_module(current_user.role.value, "teachers"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can create teachers"

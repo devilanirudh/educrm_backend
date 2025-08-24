@@ -355,22 +355,17 @@ def create_sample_data():
         db.commit()
         logger.info("Sample data created successfully")
         
-        # Print login credentials
+        # Print initialization success
         print("\n" + "="*50)
-        print("SAMPLE LOGIN CREDENTIALS")
+        print("DATABASE INITIALIZATION COMPLETE")
         print("="*50)
-        print("Admin:")
-        print("  Email: admin@school.edu")
-        print("  Password: admin123")
-        print("\nTeacher:")
-        print("  Email: teacher@school.edu")
-        print("  Password: teacher123")
-        print("\nParent:")
-        print("  Email: parent@school.edu")
-        print("  Password: parent123")
-        print("\nStudent:")
-        print("  Email: student@school.edu")
-        print("  Password: student123")
+        print("✅ Database tables created successfully")
+        print("✅ Sample data loaded")
+        print("✅ Role configuration loaded from role_config.json")
+        print("\n📝 Note: Use Firebase authentication for login")
+        print("   - Google Sign-In available")
+        print("   - Email/Password authentication available")
+        print("   - Role management via admin interface")
         print("="*50)
         
     except Exception as e:
