@@ -62,8 +62,15 @@ async def get_current_user_firebase(
         # Check if user has access based on role configuration
         role_str = role_config.get_role_for_email(email)
         
-        # If no role mapping found, deny access
-        if role_str == role_config.get_default_role('firebase_default'):
+        # Check if user has explicit role mapping (not just default)
+        email_mapping = role_config._config.get("email_role_mapping", {})
+        domain_mapping = role_config._config.get("domain_role_mapping", {})
+        
+        has_explicit_mapping = email in email_mapping
+        has_domain_mapping = any(email.endswith(domain) for domain in domain_mapping.keys())
+        
+        # If no explicit mapping found, deny access
+        if not has_explicit_mapping and not has_domain_mapping:
             logger.warning(f"🚫 Access denied for email: {email} - No role mapping found")
             logger.info(f"📧 Email: {email} is not in role configuration")
             raise HTTPException(
@@ -79,8 +86,14 @@ async def get_current_user_firebase(
             email = firebase_user['email']
             role_str = role_config.get_role_for_email(email)
             
-            # If no email mapping, check Firebase custom claims
-            if role_str == role_config.get_default_role('firebase_default'):
+            # If no explicit email mapping, check Firebase custom claims
+            email_mapping = role_config._config.get("email_role_mapping", {})
+            domain_mapping = role_config._config.get("domain_role_mapping", {})
+            
+            has_explicit_mapping = email in email_mapping
+            has_domain_mapping = any(email.endswith(domain) for domain in domain_mapping.keys())
+            
+            if not has_explicit_mapping and not has_domain_mapping:
                 role_str = firebase_user.get('role', role_str)
             
             try:
@@ -106,6 +119,44 @@ async def get_current_user_firebase(
             db.refresh(user)
             
             logger.info(f"✅ Created new user: {user.id} ({email}) with role: {role.value}")
+            
+            # Auto-create role-specific profile record
+            from datetime import date
+            if role == UserRole.STUDENT:
+                from app.models.student import Student
+                # Generate a unique student ID
+                student_count = db.query(Student).count()
+                student_id = f"STU{str(student_count + 1).zfill(3)}"
+                
+                student = Student(
+                    user_id=user.id,
+                    student_id=student_id,
+                    admission_date=date.today(),
+                    academic_year="2024-25",  # You might want to make this dynamic
+                    is_active=True
+                )
+                db.add(student)
+                db.commit()
+                db.refresh(student)
+                logger.info(f"✅ Auto-created student profile: {student_id} for user {user.id}")
+                
+            elif role == UserRole.TEACHER:
+                from app.models.teacher import Teacher
+                # Generate a unique employee ID
+                teacher_count = db.query(Teacher).count()
+                employee_id = f"EMP{str(teacher_count + 1).zfill(3)}"
+                
+                teacher = Teacher(
+                    user_id=user.id,
+                    employee_id=employee_id,
+                    hire_date=date.today(),
+                    employment_type="full-time",
+                    is_active=True
+                )
+                db.add(teacher)
+                db.commit()
+                db.refresh(teacher)
+                logger.info(f"✅ Auto-created teacher profile: {employee_id} for user {user.id}")
         else:
             # Update existing user with Firebase UID if not set
             if not user.firebase_uid:
@@ -117,8 +168,15 @@ async def get_current_user_firebase(
             email = firebase_user['email']
             firebase_role = role_config.get_role_for_email(email)
             
-            # If no role mapping found, deny access
-            if firebase_role == role_config.get_default_role('firebase_default'):
+            # Check if user has explicit role mapping (not just default)
+            email_mapping = role_config._config.get("email_role_mapping", {})
+            domain_mapping = role_config._config.get("domain_role_mapping", {})
+            
+            has_explicit_mapping = email in email_mapping
+            has_domain_mapping = any(email.endswith(domain) for domain in domain_mapping.keys())
+            
+            # If no explicit mapping found, deny access
+            if not has_explicit_mapping and not has_domain_mapping:
                 logger.warning(f"🚫 Access denied for existing user: {email} - No role mapping found")
                 logger.info(f"📧 Email: {email} is not in role configuration")
                 raise HTTPException(
@@ -126,8 +184,8 @@ async def get_current_user_firebase(
                     detail="Access denied. Your email is not authorized to access this system. Please contact the administrator."
                 )
             
-            # If no email mapping, check Firebase custom claims
-            if firebase_role == role_config.get_default_role('firebase_default'):
+            # If no explicit email mapping, check Firebase custom claims
+            if not has_explicit_mapping and not has_domain_mapping:
                 firebase_role = firebase_user.get('role', firebase_role)
             try:
                 firebase_role_enum = UserRole(firebase_role.lower())

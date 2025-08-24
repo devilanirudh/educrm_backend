@@ -8,6 +8,8 @@ from sqlalchemy.sql import func
 from app.database.session import Base
 
 
+
+
 # Association table for teacher-subject relationships
 teacher_subject_associations = Table(
     'teacher_subject_associations',

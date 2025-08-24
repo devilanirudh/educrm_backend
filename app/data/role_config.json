@@ -34,7 +34,10 @@
         "student_management",
         "assignment_management",
         "grade_management",
-        "communication_access"
+        "communication_access",
+        "attendance_management",
+        "attendance_marking",
+        "attendance_reports"
       ],
       "level": 60,
       "color": "#059669",
@@ -48,7 +51,8 @@
         "view_child_grades",
         "view_child_attendance",
         "communication_access",
-        "fee_management"
+        "fee_management",
+        "attendance_notifications"
       ],
       "level": 40,
       "color": "#7c3aed",
@@ -62,7 +66,9 @@
         "view_grades",
         "view_schedule",
         "submit_assignments",
-        "communication_access"
+        "communication_access",
+        "view_own_attendance",
+        "self_check_in"
       ],
       "level": 20,
       "color": "#ea580c",
@@ -143,6 +149,15 @@
         "teacher"
       ]
     },
+    "attendance": {
+      "name": "Attendance Management",
+      "description": "Manage student attendance and policies",
+      "roles": [
+        "super_admin",
+        "admin",
+        "teacher"
+      ]
+    },
     "communication": {
       "name": "Communication",
       "description": "Send messages and notifications",
@@ -196,7 +211,10 @@
     "student@school.edu": "student",
     "anirudh@prodloop.com": "super_admin",
     "anirudhdevs71@gmail.com": "teacher",
-    "mayanksaxena1262@gmail.com": "super_admin"
+    "mayanksaxena1262@gmail.com": "super_admin",
+    "thakurrobin344@gmail.com": "super_admin",
+    "anirudh2111014@akgec.ac.in": "student",
+    "anirudhdevs91@gmail.com": "parent"
   },
   "domain_role_mapping": {
     "@school.edu": "student",

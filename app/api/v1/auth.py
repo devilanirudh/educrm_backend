@@ -502,3 +502,55 @@ async def switch_role(
         "token_type": "bearer",
         "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     }
+
+
+@router.delete("/users/{user_id}", response_model=dict)
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Delete a user and their profile (cascade delete)"""
+    
+    # Only super_admin and admin can delete users
+    if current_user.role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to delete users"
+        )
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Prevent self-deletion
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account"
+        )
+    
+    try:
+        # Store user info for logging
+        user_email = user.email
+        user_role = user.role.value
+        
+        # Delete the user (this will cascade to related profile records)
+        db.delete(user)
+        
+        db.commit()
+        
+        logger.info(f"User {user_email} (role: {user_role}) deleted by {current_user.email}")
+        
+        return {"message": "User and related profile deleted successfully"}
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting user: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete user"
+        )

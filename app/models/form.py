@@ -25,6 +25,7 @@ class FieldType(enum.Enum):
     DATE = "date"
     SELECT = "select"
     MULTI_SELECT = "multi-select"
+    DYNAMIC_CONFIG = "dynamic-config"
     FILE = "file"
     TOGGLE = "toggle"
     TEXTAREA = "textarea"
@@ -81,6 +82,7 @@ class FormField(Base):
     is_filterable = Column(Boolean, default=False, nullable=False)
     is_visible_in_listing = Column(Boolean, default=False, nullable=False)
     validation_rules = Column(JSON, nullable=True)  # e.g., min, max, pattern
+    config = Column(JSON, nullable=True)  # Configuration for dynamic fields
     order = Column(Integer, default=0, nullable=False)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

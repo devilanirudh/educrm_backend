@@ -13,7 +13,7 @@ from app.core.permissions import UserRole
 from app.core.role_config import role_config
 from app.models.user import User
 from app.models.teacher import Teacher
-from app.models.academic import Class, Subject
+from app.models.academic import Class, Subject, ClassSubject
 from app.models.form import Form, FieldType
 from app.services.auth import AuthService
 import logging
@@ -298,6 +298,38 @@ async def create_teacher(
             detail="Failed to create teacher"
         )
 
+@router.get("/active", response_model=dict)
+async def get_active_teachers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Get active teachers for dropdown selection"""
+    
+    # Check permissions - only admins and staff can view teachers
+    if not role_config.can_access_module(current_user.role.value, "teachers"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to access teachers module"
+        )
+    
+    # Get active teachers with user information
+    teachers = db.query(Teacher).join(User).filter(
+        Teacher.is_active == True,
+        User.is_active == True
+    ).all()
+    
+    teacher_options = []
+    for teacher in teachers:
+        teacher_options.append({
+            "value": str(teacher.id),
+            "label": f"{teacher.user.first_name} {teacher.user.last_name} ({teacher.employee_id})"
+        })
+    
+    return {
+        "teachers": teacher_options
+    }
+
+
 @router.get("/{teacher_id}", response_model=dict)
 async def get_teacher(
     teacher_id: int,
@@ -316,10 +348,10 @@ async def get_teacher(
             detail="Teacher not found"
         )
     
-    # Check permissions - teachers can view their own data, admin can view all
+    # Check permissions - teachers can view their own data, others need module access
     if (current_user.role == UserRole.TEACHER and 
         current_user.id != teacher.user_id and 
-        current_user.role not in [UserRole.ADMIN]):
+        not role_config.can_access_module(current_user.role.value, "teachers")):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -383,8 +415,8 @@ async def update_teacher(
             detail="Access denied"
         )
     
-    # Only admin can update sensitive fields like salary and is_active
-    if (current_user.role != UserRole.ADMIN and 
+    # Only users with module access can update sensitive fields like salary and is_active
+    if (not role_config.can_access_module(current_user.role.value, "teachers") and 
         (teacher_data.salary is not None or teacher_data.is_active is not None)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -425,16 +457,31 @@ async def update_teacher(
         if teacher_data.department is not None:
             teacher.department = teacher_data.department
         if teacher_data.dynamic_data is not None:
-            teacher.dynamic_data = teacher_data.dynamic_data
+            try:
+                logger.info(f"Received dynamic_data for teacher {teacher.id}: {teacher_data.dynamic_data}")
+                teacher.dynamic_data = teacher_data.dynamic_data
+                
+                # Process class assignments if present
+                if teacher_data.dynamic_data.get("class_assignments"):
+                    logger.info(f"Processing class assignments for teacher {teacher.id}: {teacher_data.dynamic_data['class_assignments']}")
+                    process_class_assignments(db, teacher, teacher_data.dynamic_data["class_assignments"])
+                else:
+                    logger.info(f"No class assignments found in dynamic_data for teacher {teacher.id}")
+                    logger.info(f"Available keys in dynamic_data: {list(teacher_data.dynamic_data.keys())}")
+            except Exception as e:
+                logger.error(f"Error processing dynamic_data: {str(e)}")
+                logger.error(f"Dynamic data that caused error: {teacher_data.dynamic_data}")
+                raise
         
-        # Admin-only fields
-        if current_user.role == UserRole.ADMIN:
+        # Admin-only fields - only users with module access can update these
+        if role_config.can_access_module(current_user.role.value, "teachers"):
             if teacher_data.salary is not None:
                 teacher.salary = teacher_data.salary
             if teacher_data.is_active is not None:
                 teacher.is_active = teacher_data.is_active
                 user.is_active = teacher_data.is_active
         
+        logger.info(f"About to commit changes for teacher {teacher.employee_id}")
         db.commit()
         
         logger.info(f"Teacher {teacher.employee_id} updated by {current_user.email}")
@@ -444,6 +491,9 @@ async def update_teacher(
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating teacher: {str(e)}")
+        logger.error(f"Full error details: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update teacher"
@@ -455,12 +505,13 @@ async def delete_teacher(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
-    """Soft delete a teacher (deactivate)"""
+    """Delete a teacher and their user record (cascade delete)"""
     
-    if current_user.role not in [UserRole.ADMIN]:
+    # Check if current user has permission to access teachers module
+    if not role_config.can_access_module(current_user.role.value, "teachers"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can delete teachers"
+            detail="Not enough permissions to access teachers module"
         )
     
     teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
@@ -471,22 +522,25 @@ async def delete_teacher(
         )
     
     try:
-        # Soft delete - deactivate instead of removing
-        teacher.is_active = False
-        teacher.user.is_active = False
+        # Store user info for logging
+        user_email = teacher.user.email
+        employee_id = teacher.employee_id
+        
+        # Delete the user record (this will cascade to delete the teacher and related records)
+        db.delete(teacher.user)
         
         db.commit()
         
-        logger.info(f"Teacher {teacher.employee_id} deactivated by {current_user.email}")
+        logger.info(f"Teacher {employee_id} and user {user_email} deleted by {current_user.email}")
         
-        return {"message": "Teacher deactivated successfully"}
+        return {"message": "Teacher and user record deleted successfully"}
         
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deactivating teacher: {str(e)}")
+        logger.error(f"Error deleting teacher: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to deactivate teacher"
+            detail="Failed to delete teacher"
         )
 
 # Teacher's Classes and Subjects
@@ -759,6 +813,19 @@ async def create_teacher_from_dynamic_form(
         db.commit()
         db.refresh(teacher)
 
+        # Process class assignments if present
+        if teacher_data.dynamic_data.get("class_assignments"):
+            logger.info(f"Processing class assignments for new teacher {teacher.id}: {teacher_data.dynamic_data['class_assignments']}")
+            try:
+                process_class_assignments(db, teacher, teacher_data.dynamic_data["class_assignments"])
+                db.commit()
+                logger.info(f"Successfully processed class assignments for teacher {teacher.id}")
+            except Exception as e:
+                logger.error(f"Error processing class assignments for teacher {teacher.id}: {e}")
+                db.rollback()
+        else:
+            logger.info(f"No class assignments found for teacher {teacher.id}")
+
         logger.info(f"Teacher {teacher.employee_id} created from dynamic form by {current_user.email}")
 
         return {
@@ -785,3 +852,190 @@ async def create_teacher_from_dynamic_form(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create teacher"
         )
+
+# Get current teacher's profile
+@router.get("/me/profile", response_model=dict)
+async def get_current_teacher_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """Get the current user's teacher profile"""
+    
+    # Check if user is a teacher
+    if current_user.role != UserRole.TEACHER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only teachers can access their profile"
+        )
+    
+    # Get teacher profile
+    teacher = db.query(Teacher).filter(Teacher.user_id == current_user.id).first()
+    
+    if not teacher:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Teacher profile not found"
+        )
+    
+    # Get assigned classes - both as class teacher and through subject assignments
+    assigned_classes = []
+    
+    # Get classes where teacher is the class teacher
+    class_teacher_classes = db.query(Class).filter(Class.class_teacher_id == teacher.id).all()
+    logger.info(f"Teacher {teacher.id} is class teacher for {len(class_teacher_classes)} classes")
+    for class_obj in class_teacher_classes:
+        assigned_classes.append({
+            "id": class_obj.id,
+            "name": class_obj.name,
+            "section": class_obj.section,
+            "grade_level": class_obj.grade_level,
+            "academic_year": class_obj.academic_year,
+            "is_active": class_obj.is_active,
+            "role": "class_teacher",
+            "subjects": []  # Class teachers don't teach specific subjects
+        })
+    
+    # Get classes through subject assignments with subjects
+    subject_assignments = db.query(ClassSubject).filter(ClassSubject.teacher_id == teacher.id).options(
+        joinedload(ClassSubject.class_info),
+        joinedload(ClassSubject.subject)
+    ).all()
+    
+    logger.info(f"Teacher {teacher.id} has {len(subject_assignments)} subject assignments")
+    
+    # Group by class
+    class_subjects = {}
+    for assignment in subject_assignments:
+        class_id = assignment.class_id
+        if class_id not in class_subjects:
+            class_subjects[class_id] = {
+                "id": assignment.class_info.id,
+                "name": assignment.class_info.name,
+                "section": assignment.class_info.section,
+                "grade_level": assignment.class_info.grade_level,
+                "academic_year": assignment.class_info.academic_year,
+                "is_active": assignment.class_info.is_active,
+                "role": "subject_teacher",
+                "subjects": []
+            }
+        
+        class_subjects[class_id]["subjects"].append({
+            "id": assignment.subject.id,
+            "name": assignment.subject.name,
+            "weekly_hours": assignment.weekly_hours,
+            "is_optional": assignment.is_optional
+        })
+    
+    # Add subject teacher classes (avoiding duplicates)
+    for class_data in class_subjects.values():
+        if not any(c["id"] == class_data["id"] for c in assigned_classes):
+            assigned_classes.append(class_data)
+    
+    logger.info(f"Total assigned classes for teacher {teacher.id}: {len(assigned_classes)}")
+    
+    return {
+        "id": teacher.id,
+        "employee_id": teacher.employee_id,
+        "user_id": teacher.user_id,
+        "qualifications": teacher.qualifications,
+        "specialization": teacher.specialization,
+        "experience": teacher.experience,
+        "is_active": teacher.is_active,
+        "assigned_classes": assigned_classes,
+        "total_classes": len(assigned_classes)
+    }
+
+
+# Get active teachers for dropdown
+@router.get("/active", response_model=dict)
+async def get_active_teachers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Get active teachers for dropdown selection"""
+    
+    # Check permissions - only admins and staff can view teachers
+    if not role_config.can_access_module(current_user.role.value, "teachers"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to access teachers module"
+        )
+    
+    # Get active teachers with user information
+    teachers = db.query(Teacher).join(User).filter(
+        Teacher.is_active == True,
+        User.is_active == True
+    ).all()
+    
+    teacher_options = []
+    for teacher in teachers:
+        teacher_options.append({
+            "value": str(teacher.id),
+            "label": f"{teacher.user.first_name} {teacher.user.last_name} ({teacher.employee_id})"
+        })
+    
+    return {
+        "teachers": teacher_options
+    }
+
+
+def process_class_assignments(db: Session, teacher: Teacher, class_assignments: List[dict]):
+    """Process class assignments and create/update ClassSubject records"""
+    try:
+        logger.info(f"Starting to process {len(class_assignments)} class assignments for teacher {teacher.id}")
+        
+        # Remove existing class assignments for this teacher
+        existing_assignments = db.query(ClassSubject).filter(ClassSubject.teacher_id == teacher.id).all()
+        logger.info(f"Removing {len(existing_assignments)} existing assignments for teacher {teacher.id}")
+        for assignment in existing_assignments:
+            db.delete(assignment)
+        
+        # Create new class assignments
+        for assignment in class_assignments:
+            class_grade = assignment.get("class")
+            section = assignment.get("section")
+            subject_value = assignment.get("subject")
+            
+            if not all([class_grade, section, subject_value]):
+                continue
+            
+            # Find the class
+            class_obj = db.query(Class).filter(
+                Class.grade_level == int(class_grade),
+                Class.section == section
+            ).first()
+            
+            if not class_obj:
+                logger.warning(f"Class not found: Grade {class_grade} Section {section}")
+                continue
+            else:
+                logger.info(f"Found class: {class_obj.name} {class_obj.section} (ID: {class_obj.id})")
+            
+            # Find the subject
+            subject = db.query(Subject).filter(Subject.name.ilike(f"%{subject_value.replace('_', ' ')}%")).first()
+            if not subject:
+                logger.warning(f"Subject not found: {subject_value}")
+                continue
+            else:
+                logger.info(f"Found subject: {subject.name} (ID: {subject.id})")
+            
+            # Create ClassSubject record
+            class_subject = ClassSubject(
+                class_id=class_obj.id,
+                subject_id=subject.id,
+                teacher_id=teacher.id,
+                weekly_hours=5,  # Default hours
+                is_optional=False
+            )
+            db.add(class_subject)
+            logger.info(f"Created ClassSubject: Class {class_obj.id}, Subject {subject.id}, Teacher {teacher.id}")
+        
+        db.flush()
+        logger.info(f"Processed {len(class_assignments)} class assignments for teacher {teacher.employee_id}")
+        
+    except Exception as e:
+        logger.error(f"Error processing class assignments: {str(e)}")
+        logger.error(f"Full error details: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise

@@ -202,13 +202,17 @@ def create_sample_data():
             classes.append(class_obj)
         db.flush()
         
-        # Assign subjects to classes
+        # Assign teacher to subjects they can teach
+        teacher.subjects = subjects  # John Smith can teach all subjects
+        db.flush()
+        
+        # Assign subjects to classes with teacher assignment
         for class_obj in classes:
             for subject in subjects:
                 class_subject = ClassSubject(
                     class_id=class_obj.id,
                     subject_id=subject.id,
-                    teacher_id=teacher.id,
+                    teacher_id=teacher.id,  # John Smith teaches this subject in this class
                     weekly_hours=5 if subject.category == "core" else 2
                 )
                 db.add(class_subject)
@@ -380,13 +384,10 @@ def init_db():
     logger.info("Initializing database...")
     
     try:
-        # Drop existing tables
-        drop_tables()
-
-        # Create tables
+        # Create tables (only if they don't exist)
         create_tables()
         
-        # Create sample data
+        # Create sample data (only if it doesn't exist)
         create_sample_data()
         
         logger.info("Database initialization completed successfully")

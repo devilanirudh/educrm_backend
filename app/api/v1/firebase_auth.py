@@ -43,8 +43,15 @@ async def verify_token(
         email = firebase_user['email']
         role_str = role_config.get_role_for_email(email)
         
-        # If no role mapping found, deny access
-        if role_str == role_config.get_default_role('firebase_default'):
+        # Check if user has explicit role mapping (not just default)
+        email_mapping = role_config._config.get("email_role_mapping", {})
+        domain_mapping = role_config._config.get("domain_role_mapping", {})
+        
+        has_explicit_mapping = email in email_mapping
+        has_domain_mapping = any(email.endswith(domain) for domain in domain_mapping.keys())
+        
+        # If no explicit mapping found, deny access
+        if not has_explicit_mapping and not has_domain_mapping:
             logger.warning(f"🚫 Access denied for email: {email} - No role mapping found")
             logger.info(f"📧 Email: {email} is not in role configuration")
             raise HTTPException(
@@ -57,8 +64,14 @@ async def verify_token(
             email = firebase_user['email']
             role_str = role_config.get_role_for_email(email)
             
-            # If no email mapping, check Firebase custom claims
-            if role_str == role_config.get_default_role('firebase_default'):
+            # If no explicit email mapping, check Firebase custom claims
+            email_mapping = role_config._config.get("email_role_mapping", {})
+            domain_mapping = role_config._config.get("domain_role_mapping", {})
+            
+            has_explicit_mapping = email in email_mapping
+            has_domain_mapping = any(email.endswith(domain) for domain in domain_mapping.keys())
+            
+            if not has_explicit_mapping and not has_domain_mapping:
                 role_str = firebase_user.get('role', role_str)
             
             try:
@@ -88,8 +101,15 @@ async def verify_token(
             email = firebase_user['email']
             firebase_role = role_config.get_role_for_email(email)
             
-            # If no role mapping found, deny access
-            if firebase_role == role_config.get_default_role('firebase_default'):
+            # Check if user has explicit role mapping (not just default)
+            email_mapping = role_config._config.get("email_role_mapping", {})
+            domain_mapping = role_config._config.get("domain_role_mapping", {})
+            
+            has_explicit_mapping = email in email_mapping
+            has_domain_mapping = any(email.endswith(domain) for domain in domain_mapping.keys())
+            
+            # If no explicit mapping found, deny access
+            if not has_explicit_mapping and not has_domain_mapping:
                 logger.warning(f"🚫 Access denied for existing user: {email} - No role mapping found")
                 logger.info(f"📧 Email: {email} is not in role configuration")
                 raise HTTPException(
@@ -97,8 +117,14 @@ async def verify_token(
                     detail="Access denied. Your email is not authorized to access this system. Please contact the administrator."
                 )
             
-            # If no email mapping, check Firebase custom claims
-            if firebase_role == role_config.get_default_role('firebase_default'):
+            # If no explicit email mapping, check Firebase custom claims
+            email_mapping = role_config._config.get("email_role_mapping", {})
+            domain_mapping = role_config._config.get("domain_role_mapping", {})
+            
+            has_explicit_mapping = email in email_mapping
+            has_domain_mapping = any(email.endswith(domain) for domain in domain_mapping.keys())
+            
+            if not has_explicit_mapping and not has_domain_mapping:
                 firebase_role = firebase_user.get('role', firebase_role)
             
             try:

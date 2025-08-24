@@ -466,11 +466,11 @@ async def update_exam(
             detail="Exam not found"
         )
 
-    # Check permissions - admin or staff can update
-    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+    # Check permissions - users need access to exams module
+    if not role_config.can_access_module(current_user.role.value, "exams"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
+            detail="Not enough permissions to access exams module"
         )
 
     try:
@@ -528,10 +528,11 @@ async def delete_exam(
 ) -> Any:
     """Soft delete an exam (cancel)"""
 
-    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+    # Check if current user has permission to access exams module
+    if not role_config.can_access_module(current_user.role.value, "exams"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators and staff can delete exams"
+            detail="Not enough permissions to access exams module"
         )
 
     exam = db.query(Exam).filter(Exam.id == exam_id).first()

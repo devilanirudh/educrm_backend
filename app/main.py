@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.database.session import engine
 from app.database.init_db import init_db
 from app.api.v1 import auth, students, teachers, classes, assignments, exams, fees, live_classes
-from app.api.v1 import library, transport, hostel, events, cms, crm, reports, communication, forms, report_cards, form_submissions, audit, firebase_auth, role_management
+from app.api.v1 import library, transport, hostel, events, cms, crm, reports, communication, forms, report_cards, form_submissions, audit, firebase_auth, role_management, attendance, parents
 
 # Create FastAPI application
 app = FastAPI(
@@ -69,6 +69,7 @@ app.include_router(firebase_auth.router, prefix=f"{settings.API_V1_STR}/firebase
 app.include_router(role_management.router, prefix=f"{settings.API_V1_STR}/role-management", tags=["Role Management"])
 app.include_router(students.router, prefix=f"{settings.API_V1_STR}/students", tags=["Student Management"])
 app.include_router(teachers.router, prefix=f"{settings.API_V1_STR}/teachers", tags=["Teacher Management"])
+app.include_router(parents.router, prefix=f"{settings.API_V1_STR}/parents", tags=["Parent Management"])
 app.include_router(classes.router, prefix=f"{settings.API_V1_STR}/classes", tags=["Class Management"])
 app.include_router(assignments.router, prefix=f"{settings.API_V1_STR}/assignments", tags=["Assignments"])
 app.include_router(exams.router, prefix=f"{settings.API_V1_STR}/exams", tags=["Exams"])
@@ -86,6 +87,7 @@ app.include_router(forms.router, prefix=f"{settings.API_V1_STR}/forms", tags=["F
 app.include_router(form_submissions.router, prefix=f"{settings.API_V1_STR}/form-submissions", tags=["Form Submissions"])
 app.include_router(report_cards.router, prefix=f"{settings.API_V1_STR}/report-cards", tags=["Report Cards"])
 app.include_router(audit.router, prefix=f"{settings.API_V1_STR}/audit", tags=["Audit Logs"])
+app.include_router(attendance.router, prefix=f"{settings.API_V1_STR}/attendance", tags=["Attendance Management"])
 
 @app.on_event("startup")
 async def startup_event():

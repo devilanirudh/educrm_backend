@@ -97,17 +97,23 @@ DEFAULT_STUDENT_FORM = {
         },
         {
             "id": "academic_year",
-            "field_type": FieldType.TEXT,
+            "field_type": FieldType.SELECT,
             "label": "Academic Year",
             "field_name": "academic_year",
-            "placeholder": "e.g., 2023-2024",
+            "placeholder": "Select academic year",
             "is_required": True,
             "is_filterable": True,
             "is_visible_in_listing": True,
             "validation_rules": {
-                "required": True,
-                "pattern": r"^\d{4}-\d{4}$"
-            }
+                "required": True
+            },
+            "options": [
+                {"id": "1", "label": "2024-2025", "value": "2024-2025"},
+                {"id": "2", "label": "2023-2024", "value": "2023-2024"},
+                {"id": "3", "label": "2022-2023", "value": "2022-2023"},
+                {"id": "4", "label": "2021-2022", "value": "2021-2022"},
+                {"id": "5", "label": "2020-2021", "value": "2020-2021"}
+            ]
         },
         {
             "id": "phone",
@@ -138,16 +144,64 @@ DEFAULT_STUDENT_FORM = {
         },
         {
             "id": "section",
-            "field_type": FieldType.TEXT,
+            "field_type": FieldType.SELECT,
             "label": "Section",
             "field_name": "section",
-            "placeholder": "Enter section (e.g., A, B, C)",
+            "placeholder": "Select section",
             "is_required": False,
             "is_filterable": True,
             "is_visible_in_listing": True,
             "validation_rules": {
-                "required": False,
-                "maxLength": 10
+                "required": False
+            },
+            "options": [
+                {"id": "1", "label": "A", "value": "A"},
+                {"id": "2", "label": "B", "value": "B"},
+                {"id": "3", "label": "C", "value": "C"},
+                {"id": "4", "label": "D", "value": "D"},
+                {"id": "5", "label": "E", "value": "E"},
+                {"id": "6", "label": "F", "value": "F"}
+            ]
+        },
+        {
+            "id": "grade_level",
+            "field_type": FieldType.SELECT,
+            "label": "Grade Level",
+            "field_name": "grade_level",
+            "placeholder": "Select grade level",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            },
+            "options": [
+                {"id": "1", "label": "Grade 1", "value": "1"},
+                {"id": "2", "label": "Grade 2", "value": "2"},
+                {"id": "3", "label": "Grade 3", "value": "3"},
+                {"id": "4", "label": "Grade 4", "value": "4"},
+                {"id": "5", "label": "Grade 5", "value": "5"},
+                {"id": "6", "label": "Grade 6", "value": "6"},
+                {"id": "7", "label": "Grade 7", "value": "7"},
+                {"id": "8", "label": "Grade 8", "value": "8"},
+                {"id": "9", "label": "Grade 9", "value": "9"},
+                {"id": "10", "label": "Grade 10", "value": "10"},
+                {"id": "11", "label": "Grade 11", "value": "11"},
+                {"id": "12", "label": "Grade 12", "value": "12"}
+            ]
+        },
+        {
+            "id": "parent_email",
+            "field_type": FieldType.EMAIL,
+            "label": "Parent Email",
+            "field_name": "parent_email",
+            "placeholder": "Enter parent email address",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True,
+                "type": "email"
             }
         },
         {
@@ -399,6 +453,103 @@ DEFAULT_TEACHER_FORM = {
             ]
         },
         {
+            "id": "subjects",
+            "field_type": FieldType.MULTI_SELECT,
+            "label": "Subjects I Can Teach",
+            "field_name": "subjects",
+            "placeholder": "Select subjects you can teach",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False
+            },
+            "options": [
+                {"id": "1", "label": "Mathematics", "value": "mathematics"},
+                {"id": "2", "label": "English", "value": "english"},
+                {"id": "3", "label": "Science", "value": "science"},
+                {"id": "4", "label": "Social Studies", "value": "social_studies"},
+                {"id": "5", "label": "Physical Education", "value": "physical_education"},
+                {"id": "6", "label": "Art", "value": "art"},
+                {"id": "7", "label": "Music", "value": "music"}
+            ]
+        },
+        {
+            "id": "assigned_classes",
+            "field_type": FieldType.MULTI_SELECT,
+            "label": "Classes I Teach",
+            "field_name": "assigned_classes",
+            "placeholder": "Select classes you are assigned to teach",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False
+            },
+            "options": [
+                {"id": "1", "label": "Grade 1 A", "value": "grade_1_a"},
+                {"id": "2", "label": "Grade 1 B", "value": "grade_1_b"},
+                {"id": "3", "label": "Grade 2 A", "value": "grade_2_a"},
+                {"id": "4", "label": "Grade 3 A", "value": "grade_3_a"},
+                {"id": "5", "label": "Grade 4 A", "value": "grade_4_a"},
+                {"id": "6", "label": "Grade 5 A", "value": "grade_5_a"}
+            ]
+        },
+        {
+            "id": "class_assignments",
+            "field_type": FieldType.DYNAMIC_CONFIG,
+            "label": "Class-Subject Assignments",
+            "field_name": "class_assignments",
+            "placeholder": "Configure your class and subject assignments",
+            "is_required": False,
+            "is_filterable": False,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False
+            },
+            "config": {
+                "type": "class_subject_assignments",
+                "fields": [
+                    {
+                        "name": "class",
+                        "type": "select",
+                        "label": "Class",
+                        "options": [
+                            {"value": "1", "label": "Grade 1"},
+                            {"value": "2", "label": "Grade 2"},
+                            {"value": "3", "label": "Grade 3"},
+                            {"value": "4", "label": "Grade 4"},
+                            {"value": "5", "label": "Grade 5"}
+                        ]
+                    },
+                    {
+                        "name": "section",
+                        "type": "select",
+                        "label": "Section",
+                        "options": [
+                            {"value": "A", "label": "A"},
+                            {"value": "B", "label": "B"},
+                            {"value": "C", "label": "C"}
+                        ]
+                    },
+                    {
+                        "name": "subject",
+                        "type": "select",
+                        "label": "Subject",
+                        "options": [
+                            {"value": "mathematics", "label": "Mathematics"},
+                            {"value": "english", "label": "English"},
+                            {"value": "science", "label": "Science"},
+                            {"value": "social_studies", "label": "Social Studies"},
+                            {"value": "physical_education", "label": "Physical Education"},
+                            {"value": "art", "label": "Art"},
+                            {"value": "music", "label": "Music"}
+                        ]
+                    }
+                ]
+            }
+        },
+        {
             "id": "salary",
             "field_type": FieldType.NUMBER,
             "label": "Salary",
@@ -450,32 +601,51 @@ DEFAULT_CLASS_FORM = {
     "fields": [
         {
             "id": "name",
-            "field_type": FieldType.TEXT,
+            "field_type": FieldType.SELECT,
             "label": "Class Name",
             "field_name": "name",
-            "placeholder": "Enter class name",
+            "placeholder": "Select class name",
             "is_required": True,
             "is_filterable": True,
             "is_visible_in_listing": True,
             "validation_rules": {
-                "required": True,
-                "minLength": 1,
-                "maxLength": 50
-            }
+                "required": True
+            },
+            "options": [
+                {"id": "1", "label": "Grade 1", "value": "Grade 1"},
+                {"id": "2", "label": "Grade 2", "value": "Grade 2"},
+                {"id": "3", "label": "Grade 3", "value": "Grade 3"},
+                {"id": "4", "label": "Grade 4", "value": "Grade 4"},
+                {"id": "5", "label": "Grade 5", "value": "Grade 5"},
+                {"id": "6", "label": "Grade 6", "value": "Grade 6"},
+                {"id": "7", "label": "Grade 7", "value": "Grade 7"},
+                {"id": "8", "label": "Grade 8", "value": "Grade 8"},
+                {"id": "9", "label": "Grade 9", "value": "Grade 9"},
+                {"id": "10", "label": "Grade 10", "value": "Grade 10"},
+                {"id": "11", "label": "Grade 11", "value": "Grade 11"},
+                {"id": "12", "label": "Grade 12", "value": "Grade 12"}
+            ]
         },
         {
             "id": "section",
-            "field_type": FieldType.TEXT,
+            "field_type": FieldType.SELECT,
             "label": "Section",
             "field_name": "section",
-            "placeholder": "Enter section (e.g., A, B, C)",
-            "is_required": False,
+            "placeholder": "Select section",
+            "is_required": True,
             "is_filterable": True,
             "is_visible_in_listing": True,
             "validation_rules": {
-                "required": False,
-                "maxLength": 10
-            }
+                "required": True
+            },
+            "options": [
+                {"id": "1", "label": "A", "value": "A"},
+                {"id": "2", "label": "B", "value": "B"},
+                {"id": "3", "label": "C", "value": "C"},
+                {"id": "4", "label": "D", "value": "D"},
+                {"id": "5", "label": "E", "value": "E"},
+                {"id": "6", "label": "F", "value": "F"}
+            ]
         },
         {
             "id": "stream",
@@ -490,83 +660,124 @@ DEFAULT_CLASS_FORM = {
                 "required": False
             },
             "options": [
-                {"id": "1", "label": "Science", "value": "science"},
-                {"id": "2", "label": "Commerce", "value": "commerce"},
-                {"id": "3", "label": "Arts", "value": "arts"},
-                {"id": "4", "label": "General", "value": "general"}
+                {"id": "1", "label": "Science", "value": "Science"},
+                {"id": "2", "label": "Commerce", "value": "Commerce"},
+                {"id": "3", "label": "Arts", "value": "Arts"},
+                {"id": "4", "label": "General", "value": "General"}
             ]
         },
         {
             "id": "grade_level",
-            "field_type": FieldType.NUMBER,
+            "field_type": FieldType.SELECT,
             "label": "Grade Level",
             "field_name": "grade_level",
-            "placeholder": "Enter grade level (1-12)",
+            "placeholder": "Select grade level",
             "is_required": True,
             "is_filterable": True,
             "is_visible_in_listing": True,
             "validation_rules": {
-                "required": True,
-                "min": 1,
-                "max": 12
-            }
+                "required": True
+            },
+            "options": [
+                {"id": "1", "label": "1", "value": "1"},
+                {"id": "2", "label": "2", "value": "2"},
+                {"id": "3", "label": "3", "value": "3"},
+                {"id": "4", "label": "4", "value": "4"},
+                {"id": "5", "label": "5", "value": "5"},
+                {"id": "6", "label": "6", "value": "6"},
+                {"id": "7", "label": "7", "value": "7"},
+                {"id": "8", "label": "8", "value": "8"},
+                {"id": "9", "label": "9", "value": "9"},
+                {"id": "10", "label": "10", "value": "10"},
+                {"id": "11", "label": "11", "value": "11"},
+                {"id": "12", "label": "12", "value": "12"}
+            ]
         },
         {
             "id": "academic_year",
-            "field_type": FieldType.TEXT,
+            "field_type": FieldType.SELECT,
             "label": "Academic Year",
             "field_name": "academic_year",
-            "placeholder": "e.g., 2023-2024",
+            "placeholder": "Select academic year",
             "is_required": True,
             "is_filterable": True,
             "is_visible_in_listing": True,
             "validation_rules": {
-                "required": True,
-                "pattern": r"^\d{4}-\d{4}$"
-            }
+                "required": True
+            },
+            "options": [
+                {"id": "1", "label": "2024-2025", "value": "2024-2025"},
+                {"id": "2", "label": "2025-2026", "value": "2025-2026"},
+                {"id": "3", "label": "2026-2027", "value": "2026-2027"},
+                {"id": "4", "label": "2027-2028", "value": "2027-2028"},
+                {"id": "5", "label": "2028-2029", "value": "2028-2029"}
+            ]
         },
         {
             "id": "max_students",
-            "field_type": FieldType.NUMBER,
+            "field_type": FieldType.SELECT,
             "label": "Maximum Students",
             "field_name": "max_students",
-            "placeholder": "Enter maximum number of students",
+            "placeholder": "Select maximum students",
             "is_required": False,
             "is_filterable": True,
             "is_visible_in_listing": True,
             "validation_rules": {
-                "required": False,
-                "min": 1,
-                "max": 100
-            }
+                "required": False
+            },
+            "options": [
+                {"id": "1", "label": "20", "value": "20"},
+                {"id": "2", "label": "25", "value": "25"},
+                {"id": "3", "label": "30", "value": "30"},
+                {"id": "4", "label": "35", "value": "35"},
+                {"id": "5", "label": "40", "value": "40"},
+                {"id": "6", "label": "45", "value": "45"},
+                {"id": "7", "label": "50", "value": "50"}
+            ]
         },
         {
             "id": "room_number",
-            "field_type": FieldType.TEXT,
+            "field_type": FieldType.SELECT,
             "label": "Room Number",
             "field_name": "room_number",
-            "placeholder": "Enter room number",
+            "placeholder": "Select room number",
             "is_required": False,
             "is_filterable": True,
             "is_visible_in_listing": True,
             "validation_rules": {
-                "required": False,
-                "maxLength": 20
-            }
+                "required": False
+            },
+            "options": [
+                {"id": "1", "label": "Room 101", "value": "101"},
+                {"id": "2", "label": "Room 102", "value": "102"},
+                {"id": "3", "label": "Room 103", "value": "103"},
+                {"id": "4", "label": "Room 104", "value": "104"},
+                {"id": "5", "label": "Room 105", "value": "105"},
+                {"id": "6", "label": "Room 201", "value": "201"},
+                {"id": "7", "label": "Room 202", "value": "202"},
+                {"id": "8", "label": "Room 203", "value": "203"},
+                {"id": "9", "label": "Room 204", "value": "204"},
+                {"id": "10", "label": "Room 205", "value": "205"},
+                {"id": "11", "label": "Room 301", "value": "301"},
+                {"id": "12", "label": "Room 302", "value": "302"},
+                {"id": "13", "label": "Room 303", "value": "303"},
+                {"id": "14", "label": "Room 304", "value": "304"},
+                {"id": "15", "label": "Room 305", "value": "305"}
+            ]
         },
         {
             "id": "class_teacher_id",
-            "field_type": FieldType.NUMBER,
-            "label": "Class Teacher ID",
+            "field_type": FieldType.SELECT,
+            "label": "Class Teacher",
             "field_name": "class_teacher_id",
-            "placeholder": "Enter class teacher ID",
+            "placeholder": "Select class teacher",
             "is_required": False,
             "is_filterable": True,
             "is_visible_in_listing": False,
             "validation_rules": {
-                "required": False,
-                "min": 1
-            }
+                "required": False
+            },
+            "options": []
         }
     ]
 }

@@ -2,12 +2,18 @@
 User-related database models
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Text, ForeignKey, event
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.session import Base
 from app.core.permissions import UserRole
 import enum
+
+# Import models to ensure they're available for relationships
+from app.models.live_class import LiveClass, ClassAttendance
+from app.models.communication import Message, Notification
+
+
 
 
 class User(Base):
@@ -51,15 +57,13 @@ class User(Base):
     
     # Relationships
     students = relationship("Student", back_populates="user", cascade="all, delete-orphan")
-    library_member = relationship("LibraryMember", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    hosted_classes = relationship("LiveClass", back_populates="teacher", cascade="all, delete-orphan")
     teachers = relationship("Teacher", back_populates="user", cascade="all, delete-orphan")
     parent_profiles = relationship("Parent", back_populates="user", cascade="all, delete-orphan")
     
     # Communication
     sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
-    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
-
+    notifications = relationship("Notification", back_populates="user")
+    
     # Live Classes
     hosted_classes = relationship("LiveClass", back_populates="teacher")
     live_class_attendance = relationship("ClassAttendance", back_populates="user")
@@ -177,3 +181,6 @@ class SystemNotification(Base):
     
     def __repr__(self):
         return f"<SystemNotification(id={self.id}, title='{self.title}')>"
+
+
+

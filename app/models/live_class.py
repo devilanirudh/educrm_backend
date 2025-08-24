@@ -3,6 +3,9 @@ from sqlalchemy.orm import relationship
 from app.database.session import Base
 import enum
 
+# Import Class model to ensure it's available for relationships
+from app.models.academic import Class
+
 class LiveClassStatus(str, enum.Enum):
     SCHEDULED = "scheduled"
     IN_PROGRESS = "in_progress"

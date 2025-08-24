@@ -424,12 +424,12 @@ async def update_assignment(
             detail="Assignment not found"
         )
 
-    # Check permissions - admin, staff, or the teacher who created it
-    if (current_user.role not in [UserRole.ADMIN, UserRole.STAFF] and
+    # Check permissions - users need access to assignments module or be the teacher who created it
+    if (not role_config.can_access_module(current_user.role.value, "assignments") and
         current_user.id != assignment.teacher_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
+            detail="Not enough permissions to access assignments module"
         )
 
     try:
@@ -479,10 +479,11 @@ async def delete_assignment(
 ) -> Any:
     """Soft delete an assignment (unpublish)"""
 
-    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
+    # Check if current user has permission to access assignments module
+    if not role_config.can_access_module(current_user.role.value, "assignments"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators and staff can delete assignments"
+            detail="Not enough permissions to access assignments module"
         )
 
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()

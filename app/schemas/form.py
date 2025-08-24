@@ -41,6 +41,7 @@ class FormFieldBase(BaseModel):
     is_filterable: bool = False
     is_visible_in_listing: bool = False
     validation_rules: Optional[dict] = None
+    config: Optional[dict] = None
     order: int = 0
 
 

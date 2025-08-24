@@ -6,38 +6,122 @@
       "id": "name",
       "fieldName": "name",
       "label": "Class Name",
-      "type": "text",
+      "type": "select",
       "isRequired": true,
-      "placeholder": "e.g., Grade 1"
+      "options": [
+        {"value": "Grade 1", "label": "Grade 1"},
+        {"value": "Grade 2", "label": "Grade 2"},
+        {"value": "Grade 3", "label": "Grade 3"},
+        {"value": "Grade 4", "label": "Grade 4"},
+        {"value": "Grade 5", "label": "Grade 5"},
+        {"value": "Grade 6", "label": "Grade 6"},
+        {"value": "Grade 7", "label": "Grade 7"},
+        {"value": "Grade 8", "label": "Grade 8"},
+        {"value": "Grade 9", "label": "Grade 9"},
+        {"value": "Grade 10", "label": "Grade 10"},
+        {"value": "Grade 11", "label": "Grade 11"},
+        {"value": "Grade 12", "label": "Grade 12"}
+      ]
     },
     {
       "id": "section",
       "fieldName": "section",
       "label": "Section",
-      "type": "text",
-      "placeholder": "e.g., A"
+      "type": "select",
+      "isRequired": true,
+      "options": [
+        {"value": "A", "label": "A"},
+        {"value": "B", "label": "B"},
+        {"value": "C", "label": "C"},
+        {"value": "D", "label": "D"},
+        {"value": "E", "label": "E"},
+        {"value": "F", "label": "F"}
+      ]
     },
     {
       "id": "stream",
       "fieldName": "stream",
       "label": "Stream",
-      "type": "text",
-      "placeholder": "e.g., Science"
+      "type": "select",
+      "options": [
+        {"value": "Science", "label": "Science"},
+        {"value": "Commerce", "label": "Commerce"},
+        {"value": "Arts", "label": "Arts"},
+        {"value": "General", "label": "General"}
+      ]
     },
     {
       "id": "grade_level",
       "fieldName": "grade_level",
       "label": "Grade Level",
-      "type": "number",
-      "isRequired": true
+      "type": "select",
+      "isRequired": true,
+      "options": [
+        {"value": "1", "label": "1"},
+        {"value": "2", "label": "2"},
+        {"value": "3", "label": "3"},
+        {"value": "4", "label": "4"},
+        {"value": "5", "label": "5"},
+        {"value": "6", "label": "6"},
+        {"value": "7", "label": "7"},
+        {"value": "8", "label": "8"},
+        {"value": "9", "label": "9"},
+        {"value": "10", "label": "10"},
+        {"value": "11", "label": "11"},
+        {"value": "12", "label": "12"}
+      ]
     },
     {
       "id": "academic_year",
       "fieldName": "academic_year",
       "label": "Academic Year",
-      "type": "text",
+      "type": "select",
       "isRequired": true,
-      "placeholder": "e.g., 2024-2025"
+      "options": [
+        {"value": "2024-2025", "label": "2024-2025"},
+        {"value": "2025-2026", "label": "2025-2026"},
+        {"value": "2026-2027", "label": "2026-2027"},
+        {"value": "2027-2028", "label": "2027-2028"},
+        {"value": "2028-2029", "label": "2028-2029"}
+      ]
+    },
+    {
+      "id": "max_students",
+      "fieldName": "max_students",
+      "label": "Maximum Students",
+      "type": "select",
+      "options": [
+        {"value": "20", "label": "20"},
+        {"value": "25", "label": "25"},
+        {"value": "30", "label": "30"},
+        {"value": "35", "label": "35"},
+        {"value": "40", "label": "40"},
+        {"value": "45", "label": "45"},
+        {"value": "50", "label": "50"}
+      ]
+    },
+    {
+      "id": "room_number",
+      "fieldName": "room_number",
+      "label": "Room Number",
+      "type": "select",
+      "options": [
+        {"value": "101", "label": "Room 101"},
+        {"value": "102", "label": "Room 102"},
+        {"value": "103", "label": "Room 103"},
+        {"value": "104", "label": "Room 104"},
+        {"value": "105", "label": "Room 105"},
+        {"value": "201", "label": "Room 201"},
+        {"value": "202", "label": "Room 202"},
+        {"value": "203", "label": "Room 203"},
+        {"value": "204", "label": "Room 204"},
+        {"value": "205", "label": "Room 205"},
+        {"value": "301", "label": "Room 301"},
+        {"value": "302", "label": "Room 302"},
+        {"value": "303", "label": "Room 303"},
+        {"value": "304", "label": "Room 304"},
+        {"value": "305", "label": "Room 305"}
+      ]
     },
     {
       "id": "class_teacher_id",
@@ -45,12 +129,6 @@
       "label": "Class Teacher",
       "type": "select",
       "options": []
-    },
-    {
-      "id": "max_students",
-      "fieldName": "max_students",
-      "label": "Capacity",
-      "type": "number"
     }
   ]
 }

@@ -62,11 +62,11 @@ class Class(Base):
     class_teacher = relationship("Teacher", foreign_keys=[class_teacher_id])
     teachers = relationship("Teacher", secondary="teacher_class_associations", back_populates="classes")
     students = relationship("Student", foreign_keys="Student.current_class_id", back_populates="current_class")
-    subjects = relationship("ClassSubject", back_populates="class_info")
-    timetable_slots = relationship("TimetableSlot", back_populates="class_info")
-    assignments = relationship("Assignment", back_populates="class_info")
-    exams = relationship("Exam", back_populates="class_info")
-    live_classes = relationship("LiveClass", back_populates="class_")
+    subjects = relationship("ClassSubject", back_populates="class_info", cascade="all, delete-orphan")
+    timetable_slots = relationship("TimetableSlot", back_populates="class_info", cascade="all, delete-orphan")
+    assignments = relationship("Assignment", back_populates="class_info", cascade="all, delete-orphan")
+    exams = relationship("Exam", back_populates="class_info", cascade="all, delete-orphan")
+    live_classes = relationship("LiveClass", back_populates="class_", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Class(id={self.id}, name='{self.name}', section='{self.section}')>"
