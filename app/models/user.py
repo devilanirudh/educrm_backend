@@ -61,12 +61,12 @@ class User(Base):
     parent_profiles = relationship("Parent", back_populates="user", cascade="all, delete-orphan")
     
     # Communication
-    sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
-    notifications = relationship("Notification", back_populates="user")
+    sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     
     # Live Classes
     hosted_classes = relationship("LiveClass", back_populates="teacher")
-    live_class_attendance = relationship("ClassAttendance", back_populates="user")
+    live_class_attendance = relationship("ClassAttendance", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', role='{self.role}')>"
