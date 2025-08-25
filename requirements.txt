@@ -32,3 +32,4 @@ stripe==7.8.0
 reportlab==4.0.7
 qrcode==7.4.2
 firebase-admin==6.4.0
+werkzeug==3.0.1

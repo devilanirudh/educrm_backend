@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.database.session import engine
 from app.database.init_db import init_db
 from app.api.v1 import auth, students, teachers, classes, assignments, exams, fees, live_classes
-from app.api.v1 import library, transport, hostel, events, cms, crm, reports, communication, forms, report_cards, form_submissions, audit, firebase_auth, role_management, attendance, parents
+from app.api.v1 import library, transport, hostel, events, cms, crm, reports, communication, forms, report_cards, form_submissions, audit, firebase_auth, role_management, attendance, parents, dashboard
 
 # Create FastAPI application
 app = FastAPI(
@@ -88,6 +88,7 @@ app.include_router(form_submissions.router, prefix=f"{settings.API_V1_STR}/form-
 app.include_router(report_cards.router, prefix=f"{settings.API_V1_STR}/report-cards", tags=["Report Cards"])
 app.include_router(audit.router, prefix=f"{settings.API_V1_STR}/audit", tags=["Audit Logs"])
 app.include_router(attendance.router, prefix=f"{settings.API_V1_STR}/attendance", tags=["Attendance Management"])
+app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["Dashboard"])
 
 @app.on_event("startup")
 async def startup_event():

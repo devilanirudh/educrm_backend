@@ -33,7 +33,93 @@ async def verify_token(
                 detail="ID token is required"
             )
         
-        # Verify the token
+        # Check if this is an impersonation session token
+        if id_token.startswith('impersonation_'):
+            logger.info(f"🎭 Impersonation session token detected: {id_token[:20]}...")
+            
+            # Use the impersonation session lookup logic
+            from app.api.deps import get_current_user_with_impersonation
+            from app.models.user import UserSession
+            from datetime import datetime
+            
+            # Find the active impersonation session
+            session = db.query(UserSession).filter(
+                UserSession.session_token == id_token,
+                UserSession.is_impersonation == True,
+                UserSession.is_active == True,
+                UserSession.expires_at > datetime.utcnow()
+            ).first()
+            
+            # Debug: Check all active impersonation sessions
+            all_sessions = db.query(UserSession).filter(
+                UserSession.is_impersonation == True,
+                UserSession.is_active == True,
+                UserSession.expires_at > datetime.utcnow()
+            ).all()
+            
+            logger.info(f"🎭 Total active impersonation sessions: {len(all_sessions)}")
+            for i, s in enumerate(all_sessions):
+                logger.info(f"🎭 Session {i+1}: token={s.session_token[:20]}..., user_id={s.user_id}, impersonated_by={s.impersonated_by}")
+            
+            if not session:
+                logger.error(f"❌ Impersonation session not found for token: {id_token[:20]}...")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid impersonation session"
+                )
+            
+            logger.info(f"🎭 Found session: user_id={session.user_id}, impersonated_by={session.impersonated_by}")
+            logger.info(f"🎭 Session token: {session.session_token[:20]}...")
+            logger.info(f"🎭 Session is_impersonation: {session.is_impersonation}")
+            logger.info(f"🎭 Session is_active: {session.is_active}")
+            logger.info(f"🎭 Session expires_at: {session.expires_at}")
+            
+            # Get the impersonated user
+            user = db.query(User).filter(User.id == session.user_id).first()
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Impersonated user not found"
+                )
+            
+            logger.info(f"🎭 Impersonated user: {user.email} (ID: {user.id}, Role: {user.role})")
+            
+            # Get the original user (the one doing the impersonation)
+            original_user = db.query(User).filter(User.id == session.impersonated_by).first()
+            
+            logger.info(f"🎭 Original user: {original_user.email if original_user else 'None'} (ID: {session.impersonated_by})")
+            
+            # Update last activity
+            session.last_activity = datetime.utcnow()
+            db.commit()
+            
+            logger.info(f"✅ Impersonation session active for user: {user.email} (ID: {user.id}, Role: {user.role})")
+            
+            return {
+                "success": True,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "role": str(user.role.value),
+                    "is_active": user.is_active,
+                    "is_verified": user.is_verified,
+                    "firebase_uid": user.firebase_uid
+                },
+                "original_user": {
+                    "id": original_user.id,
+                    "email": original_user.email,
+                    "first_name": original_user.first_name,
+                    "last_name": original_user.last_name,
+                    "role": str(original_user.role.value),
+                    "is_active": original_user.is_active,
+                    "is_verified": original_user.is_verified,
+                    "firebase_uid": original_user.firebase_uid
+                } if original_user else None
+            }
+        
+        # Verify the Firebase token
         firebase_user = verify_firebase_token(id_token)
         
         # Get or create user in database

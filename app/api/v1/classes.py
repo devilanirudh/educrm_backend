@@ -12,7 +12,7 @@ from app.api.deps import get_current_user
 from app.core.permissions import UserRole
 from app.core.role_config import role_config
 from app.models.user import User
-from app.models.academic import Class, ClassSubject
+from app.models.academic import Class, ClassSubject, TimetableSlot, Subject
 from app.models.student import Student
 from app.models.teacher import Teacher
 from app.models.form import Form, FieldType
@@ -79,6 +79,24 @@ class ClassUpdateRequest(BaseModel):
 class ClassDynamicCreateRequest(BaseModel):
     """Schema for creating a class from dynamic form data"""
     dynamic_data: dict
+
+class TimetableSlotCreateRequest(BaseModel):
+    """Schema for creating a timetable slot for a class"""
+    subject_id: int
+    teacher_id: int
+    day_of_week: int  # 0=Monday, 6=Sunday
+    start_time: str   # HH:MM
+    end_time: str     # HH:MM
+    room_number: Optional[str] = None
+
+class TimetableSlotUpdateRequest(BaseModel):
+    """Schema for updating a timetable slot"""
+    subject_id: Optional[int] = None
+    teacher_id: Optional[int] = None
+    day_of_week: Optional[int] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    room_number: Optional[str] = None
 
 # Class CRUD Operations
 @router.get("", response_model=dict)
@@ -666,4 +684,146 @@ async def toggle_class_status(
             detail="Failed to toggle class status"
         )
 
+
+@router.get("/{class_id}/timetable", response_model=dict)
+async def list_timetable_slots(
+    class_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """List timetable slots for a class"""
+
+    # Permissions: require access to classes module or be teacher/student
+    if not role_config.can_access_module(current_user.role.value, "classes") and current_user.role not in [UserRole.TEACHER, UserRole.STUDENT]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    class_obj = db.query(Class).filter(Class.id == class_id).first()
+    if not class_obj:
+        raise HTTPException(status_code=404, detail="Class not found")
+
+    slots = db.query(TimetableSlot).filter(TimetableSlot.class_id == class_id).order_by(TimetableSlot.day_of_week.asc(), TimetableSlot.start_time.asc()).all()
+    return {
+        "class": {"id": class_obj.id, "name": class_obj.name, "section": class_obj.section},
+        "items": [
+            {
+                "id": s.id,
+                "day_of_week": s.day_of_week,
+                "start_time": s.start_time.isoformat(),
+                "end_time": s.end_time.isoformat(),
+                "room_number": s.room_number,
+                "subject": {"id": s.subject.id, "name": s.subject.name} if s.subject else None,
+                "teacher_id": s.teacher_id,
+            }
+            for s in slots
+        ],
+        "total": len(slots),
+    }
+
+
+@router.post("/{class_id}/timetable", response_model=dict)
+async def create_timetable_slot(
+    class_id: int,
+    data: TimetableSlotCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Create a timetable slot for a class (admin only)"""
+
+    if not role_config.can_access_module(current_user.role.value, "classes"):
+        raise HTTPException(status_code=403, detail="Not enough permissions to schedule class")
+
+    class_obj = db.query(Class).filter(Class.id == class_id).first()
+    if not class_obj:
+        raise HTTPException(status_code=404, detail="Class not found")
+
+    # Validate subject belongs to the class via ClassSubject
+    cs = db.query(ClassSubject).filter(ClassSubject.class_id == class_id, ClassSubject.subject_id == data.subject_id).first()
+    if not cs:
+        raise HTTPException(status_code=400, detail="Subject not assigned to this class")
+
+    # Parse times
+    try:
+        from datetime import datetime
+        start_time = datetime.strptime(data.start_time, "%H:%M").time()
+        end_time = datetime.strptime(data.end_time, "%H:%M").time()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Time must be in HH:MM format")
+
+    slot = TimetableSlot(
+        class_id=class_id,
+        subject_id=data.subject_id,
+        teacher_id=data.teacher_id,
+        day_of_week=data.day_of_week,
+        start_time=start_time,
+        end_time=end_time,
+        room_number=data.room_number,
+        is_active=True,
+    )
+    db.add(slot)
+    db.commit()
+    db.refresh(slot)
+
+    return {"message": "Timetable slot created", "id": slot.id}
+
+
+@router.put("/{class_id}/timetable/{slot_id}", response_model=dict)
+async def update_timetable_slot(
+    class_id: int,
+    slot_id: int,
+    data: TimetableSlotUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Update a timetable slot (admin only)"""
+
+    if not role_config.can_access_module(current_user.role.value, "classes"):
+        raise HTTPException(status_code=403, detail="Not enough permissions to update schedule")
+
+    slot = db.query(TimetableSlot).filter(TimetableSlot.id == slot_id, TimetableSlot.class_id == class_id).first()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Timetable slot not found")
+
+    # Validate subject belongs to class if changing
+    if data.subject_id is not None:
+        cs = db.query(ClassSubject).filter(ClassSubject.class_id == class_id, ClassSubject.subject_id == data.subject_id).first()
+        if not cs:
+            raise HTTPException(status_code=400, detail="Subject not assigned to this class")
+        slot.subject_id = data.subject_id
+
+    if data.teacher_id is not None:
+        slot.teacher_id = data.teacher_id
+    if data.day_of_week is not None:
+        slot.day_of_week = data.day_of_week
+    if data.start_time is not None:
+        from datetime import datetime
+        slot.start_time = datetime.strptime(data.start_time, "%H:%M").time()
+    if data.end_time is not None:
+        from datetime import datetime
+        slot.end_time = datetime.strptime(data.end_time, "%H:%M").time()
+    if data.room_number is not None:
+        slot.room_number = data.room_number
+
+    db.commit()
+    return {"message": "Timetable slot updated"}
+
+
+@router.delete("/{class_id}/timetable/{slot_id}", response_model=dict)
+async def delete_timetable_slot(
+    class_id: int,
+    slot_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Delete a timetable slot (admin only)"""
+
+    if not role_config.can_access_module(current_user.role.value, "classes"):
+        raise HTTPException(status_code=403, detail="Not enough permissions to delete schedule")
+
+    slot = db.query(TimetableSlot).filter(TimetableSlot.id == slot_id, TimetableSlot.class_id == class_id).first()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Timetable slot not found")
+
+    db.delete(slot)
+    db.commit()
+    return {"message": "Timetable slot deleted"}
 

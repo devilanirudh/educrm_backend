@@ -12,6 +12,9 @@ from app.core.permissions import UserRole, Permission, check_permission
 from app.core.role_config import role_config
 from app.models.user import User
 import logging
+from jose import JWTError, jwt
+from app.core.config import settings
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +43,60 @@ async def get_current_user_firebase(
 
     try:
         token = credentials.credentials
-        logger.info(f"🔐 Processing Firebase token of length: {len(token)}")
+        logger.info(f"🔐 Processing token of length: {len(token)}")
+        logger.info(f"🔐 Token starts with: {token[:30]}...")
+        
+        # Check if this is an impersonation session token
+        if token.startswith("impersonation_"):
+            logger.info("🎭 Impersonation session detected")
+            logger.info(f"🔍 Looking for session token: {token}")
+            
+            # Find the impersonation session
+            from app.models.user import UserSession
+            session = db.query(UserSession).filter(
+                UserSession.session_token == token,
+                UserSession.is_active == True,
+                UserSession.is_impersonation == True,
+                UserSession.expires_at > datetime.utcnow()
+            ).first()
+            
+            if not session:
+                logger.error(f"❌ Impersonation session not found for token: {token}")
+                # Let's check what sessions exist
+                all_sessions = db.query(UserSession).filter(
+                    UserSession.is_impersonation == True
+                ).all()
+                logger.info(f"🔍 Found {len(all_sessions)} impersonation sessions in database")
+                for s in all_sessions:
+                    logger.info(f"  - Session {s.id}: token={s.session_token[:20]}..., user_id={s.user_id}, active={s.is_active}")
+                
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired impersonation session"
+                )
+            
+            # Get the impersonated user
+            user = db.query(User).filter(User.id == session.user_id).first()
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Impersonated user not found"
+                )
+            
+            # Get the original user (the one doing the impersonation)
+            original_user = db.query(User).filter(User.id == session.impersonated_by).first()
+            
+            # Add impersonation info to user object
+            user.impersonated_by = session.impersonated_by
+            user.is_impersonation = True
+            user.original_user = original_user  # Add the original user data
+            
+            # Update last activity
+            session.last_activity = datetime.utcnow()
+            db.commit()
+            
+            logger.info(f"✅ Impersonation session active for user: {user.email} (ID: {user.id}, Role: {user.role})")
+            return user
         
         # Verify Firebase token
         firebase_user = verify_firebase_token(token)
@@ -217,6 +273,63 @@ async def get_current_user_firebase(
 
 # Alias for backward compatibility
 get_current_user = get_current_user_firebase
+
+async def get_current_user_with_impersonation(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db)
+) -> User:
+    """Get current user with impersonation support"""
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication credentials required"
+        )
+
+    try:
+        token = credentials.credentials
+        logger.info(f"🔐 Processing token of length: {len(token)}")
+        
+        # First try to decode as JWT (for impersonation tokens)
+        try:
+            payload = jwt.decode(
+                token,
+                settings.SECRET_KEY,
+                algorithms=["HS256"]
+            )
+            
+            # Check if this is an impersonation token
+            is_impersonation = payload.get("is_impersonation", False)
+            impersonated_by = payload.get("impersonated_by")
+            
+            if is_impersonation and impersonated_by:
+                logger.info(f"🎭 Impersonation detected: User {payload.get('sub')} impersonated by {impersonated_by}")
+                
+                # Get the impersonated user
+                user = db.query(User).filter(User.id == int(payload.get("sub"))).first()
+                if not user:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Impersonated user not found"
+                    )
+                
+                # Add impersonation info to user object
+                user.impersonated_by = impersonated_by
+                user.is_impersonation = True
+                
+                return user
+        except JWTError:
+            # If JWT decode fails, it's probably a Firebase token
+            logger.info("🔐 JWT decode failed, trying Firebase authentication")
+            pass
+        
+        # Regular Firebase authentication flow
+        return await get_current_user_firebase(credentials, db)
+    except Exception as e:
+        logger.error(f"❌ Authentication failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Authentication failed: {str(e)}"
+        )
 
 def get_current_active_user(
     current_user: User = Depends(get_current_user)

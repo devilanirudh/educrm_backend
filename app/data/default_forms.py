@@ -819,46 +819,46 @@ DEFAULT_ASSIGNMENT_FORM = {
             }
         },
         {
-            "id": "class_id",
-            "field_type": FieldType.NUMBER,
-            "label": "Class ID",
-            "field_name": "class_id",
-            "placeholder": "Enter class ID",
+            "id": "teacher_id",
+            "field_type": FieldType.SELECT,
+            "label": "Teacher",
+            "field_name": "teacher_id",
+            "placeholder": "Select teacher",
             "is_required": True,
             "is_filterable": True,
-            "is_visible_in_listing": False,
+            "is_visible_in_listing": True,
             "validation_rules": {
-                "required": True,
-                "min": 1
-            }
+                "required": True
+            },
+            "options": []  # Will be populated dynamically
+        },
+        {
+            "id": "class_id",
+            "field_type": FieldType.SELECT,
+            "label": "Class",
+            "field_name": "class_id",
+            "placeholder": "Select class",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            },
+            "options": []  # Will be populated dynamically
         },
         {
             "id": "subject_id",
-            "field_type": FieldType.NUMBER,
-            "label": "Subject ID",
+            "field_type": FieldType.SELECT,
+            "label": "Subject",
             "field_name": "subject_id",
-            "placeholder": "Enter subject ID",
+            "placeholder": "Select subject",
             "is_required": True,
             "is_filterable": True,
-            "is_visible_in_listing": False,
+            "is_visible_in_listing": True,
             "validation_rules": {
-                "required": True,
-                "min": 1
-            }
-        },
-        {
-            "id": "teacher_id",
-            "field_type": FieldType.NUMBER,
-            "label": "Teacher ID",
-            "field_name": "teacher_id",
-            "placeholder": "Enter teacher ID",
-            "is_required": True,
-            "is_filterable": True,
-            "is_visible_in_listing": False,
-            "validation_rules": {
-                "required": True,
-                "min": 1
-            }
+                "required": True
+            },
+            "options": []  # Will be populated dynamically
         },
         {
             "id": "due_date",
@@ -914,6 +914,25 @@ DEFAULT_ASSIGNMENT_FORM = {
             "validation_rules": {
                 "required": False
             }
+        },
+        {
+            "id": "status",
+            "field_type": FieldType.SELECT,
+            "label": "Status",
+            "field_name": "status",
+            "placeholder": "Select status",
+            "is_required": False,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": False
+            },
+            "options": [
+                {"id": 1, "value": "pending", "label": "Pending", "order": 1},
+                {"id": 2, "value": "submitted", "label": "Submitted", "order": 2},
+                {"id": 3, "value": "overdue", "label": "Overdue", "order": 3},
+                {"id": 4, "value": "graded", "label": "Graded", "order": 4}
+            ]
         }
     ]
 }
@@ -970,18 +989,46 @@ DEFAULT_EXAM_FORM = {
             }
         },
         {
-            "id": "class_id",
-            "field_type": FieldType.NUMBER,
-            "label": "Class ID",
-            "field_name": "class_id",
-            "placeholder": "Enter class ID",
+            "id": "teacher_id",
+            "field_type": FieldType.SELECT,
+            "label": "Teacher",
+            "field_name": "teacher_id",
+            "placeholder": "Select teacher",
             "is_required": True,
             "is_filterable": True,
-            "is_visible_in_listing": False,
+            "is_visible_in_listing": True,
             "validation_rules": {
-                "required": True,
-                "min": 1
-            }
+                "required": True
+            },
+            "options": []
+        },
+        {
+            "id": "class_id",
+            "field_type": FieldType.SELECT,
+            "label": "Class",
+            "field_name": "class_id",
+            "placeholder": "Select class",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            },
+            "options": []
+        },
+        {
+            "id": "subject_id",
+            "field_type": FieldType.SELECT,
+            "label": "Subject",
+            "field_name": "subject_id",
+            "placeholder": "Select subject",
+            "is_required": True,
+            "is_filterable": True,
+            "is_visible_in_listing": True,
+            "validation_rules": {
+                "required": True
+            },
+            "options": []
         },
         {
             "id": "exam_date",
@@ -1093,11 +1140,42 @@ DEFAULT_EXAM_FORM = {
                 "required": True
             },
             "options": [
-                {"id": "1", "label": "Upcoming", "value": "upcoming"},
-                {"id": "2", "label": "Ongoing", "value": "ongoing"},
-                {"id": "3", "label": "Completed", "value": "completed"},
-                {"id": "4", "label": "Cancelled", "value": "cancelled"}
+                {"id": "1", "label": "Draft", "value": "draft"},
+                {"id": "2", "label": "Published", "value": "published"},
+                {"id": "3", "label": "Active", "value": "active"},
+                {"id": "4", "label": "Completed", "value": "completed"},
+                {"id": "5", "label": "Cancelled", "value": "cancelled"}
             ]
+        },
+        {
+            "id": "exam_materials",
+            "field_type": FieldType.FILE,
+            "label": "Exam Materials",
+            "field_name": "exam_materials",
+            "placeholder": "Upload exam materials (PDF, DOC, etc.)",
+            "is_required": False,
+            "is_filterable": False,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False,
+                "fileTypes": ["pdf", "doc", "docx", "txt"],
+                "maxSize": 10485760  # 10MB
+            }
+        },
+        {
+            "id": "exam_image",
+            "field_type": FieldType.IMAGE,
+            "label": "Exam Image",
+            "field_name": "exam_image",
+            "placeholder": "Upload exam image",
+            "is_required": False,
+            "is_filterable": False,
+            "is_visible_in_listing": False,
+            "validation_rules": {
+                "required": False,
+                "fileTypes": ["jpg", "jpeg", "png", "gif"],
+                "maxSize": 5242880  # 5MB
+            }
         }
     ]
 }

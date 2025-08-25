@@ -24,6 +24,15 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+from pydantic import BaseModel
+from app.models.academic import Assignment, Exam
+
+class StudentDashboardResponse(BaseModel):
+    assignments: dict
+    exams: dict
+    live_classes: dict
+    grades: dict
+
 @router.get("/{student_id}/subjects", response_model=dict)
 async def get_student_subjects(
     student_id: int,
@@ -1139,4 +1148,112 @@ async def get_my_classes(
     return {
         "classes": [class_info],
         "total": 1
+    }
+
+# Student Dashboard endpoint
+@router.get("/me/dashboard", response_model=dict)
+async def get_my_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Get dashboard data for the current student user"""
+
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only students can access this endpoint"
+        )
+
+    # Resolve student
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    # Recent/pending assignments for student's class
+    assignments_q = db.query(Assignment).filter(
+        Assignment.class_id == student.current_class_id,
+        Assignment.is_published == True,
+        Assignment.is_active == True
+    ).order_by(Assignment.due_date.desc())
+    assignments = assignments_q.limit(5).all()
+
+    assignments_payload = {
+        "total": assignments_q.count(),
+        "items": [
+            {
+                "id": a.id,
+                "title": a.title,
+                "subject": a.subject.name if a.subject else None,
+                "due_date": a.due_date,
+                "status": a.status,
+            }
+            for a in assignments
+        ],
+    }
+
+    # Upcoming exams for student's class (next 30 days)
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    upcoming_q = db.query(Exam).filter(
+        Exam.class_id == student.current_class_id,
+        Exam.exam_date >= now,
+    ).order_by(Exam.exam_date.asc())
+    upcoming_exams = upcoming_q.limit(5).all()
+    exams_payload = {
+        "total": upcoming_q.count(),
+        "items": [
+            {
+                "id": e.id,
+                "title": e.title,
+                "subject": e.subject.name if e.subject else None,
+                "date": e.exam_date.date().isoformat() if e.exam_date else None,
+                "time": e.start_time.isoformat() if e.start_time else None,
+                "room": e.room_number,
+            }
+            for e in upcoming_exams
+        ],
+    }
+
+    # Live classes for student's class (next 30 days)
+    from app.models.live_class import LiveClass
+    live_q = db.query(LiveClass).filter(
+        LiveClass.class_id == student.current_class_id
+    ).order_by(LiveClass.start_time.desc())
+    live_classes = live_q.limit(5).all()
+    live_payload = {
+        "total": live_q.count(),
+        "items": [
+            {
+                "id": lc.id,
+                "subject": lc.topic,
+                "teacher": None,
+                "time": lc.start_time.isoformat() if lc.start_time else None,
+                "status": lc.status.value if hasattr(lc.status, 'value') else lc.status,
+            }
+            for lc in live_classes
+        ],
+    }
+
+    # Recent grades for this student
+    grades_q = db.query(Grade).filter(Grade.student_id == student.id).order_by(Grade.graded_at.desc())
+    grades = grades_q.limit(5).all()
+    grades_payload = {
+        "total": grades_q.count(),
+        "items": [
+            {
+                "id": g.id,
+                "subject": g.subject.name if g.subject else None,
+                "assignment": g.assessment_name,
+                "grade": g.grade_letter,
+                "score": round((g.percentage or g.percentage_score or 0), 2),
+            }
+            for g in grades
+        ],
+    }
+
+    return {
+        "assignments": assignments_payload,
+        "exams": exams_payload,
+        "liveClasses": live_payload,
+        "grades": grades_payload,
     }

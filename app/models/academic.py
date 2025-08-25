@@ -152,6 +152,10 @@ class Assignment(Base):
     # Status
     is_published = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    status = Column(String(20), default="pending", nullable=False)  # pending, submitted, overdue, graded
+    
+    # Dynamic data for form builder
+    dynamic_data = Column(JSON, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

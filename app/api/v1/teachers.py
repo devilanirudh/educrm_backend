@@ -13,6 +13,8 @@ from app.core.permissions import UserRole
 from app.core.role_config import role_config
 from app.models.user import User
 from app.models.teacher import Teacher
+from app.models.student import Student, Grade
+from app.models.academic import Assignment
 from app.models.academic import Class, Subject, ClassSubject
 from app.models.form import Form, FieldType
 from app.services.auth import AuthService
@@ -327,6 +329,94 @@ async def get_active_teachers(
     
     return {
         "teachers": teacher_options
+    }
+
+# Teacher Dashboard endpoint
+@router.get("/me/dashboard", response_model=dict)
+async def get_my_teacher_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Get dashboard data for the current teacher user"""
+
+    if current_user.role != UserRole.TEACHER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only teachers can access this endpoint"
+        )
+
+    teacher = db.query(Teacher).filter(Teacher.user_id == current_user.id).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Teacher profile not found")
+
+    # Classes taught (as class teacher or subject teacher)
+    classes_q = db.query(Class).filter(
+        or_(
+            Class.class_teacher_id == teacher.id,
+            Class.subjects.any(ClassSubject.teacher_id == teacher.id)
+        )
+    )
+    classes = classes_q.limit(10).all()
+    classes_payload = {
+        "total": classes_q.count(),
+        "items": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "section": c.section,
+                "subject": None,
+                "time": None,
+                "room": c.room_number,
+            }
+            for c in classes
+        ],
+    }
+
+    # Students count across assigned classes
+    students_count = 0
+    if classes:
+        class_ids = [c.id for c in classes]
+        students_count = db.query(Student).filter(Student.current_class_id.in_(class_ids)).count()
+    students_payload = {"total": students_count}
+
+    # Recent assignments created by teacher
+    assignments_q = db.query(Assignment).filter(Assignment.teacher_id == teacher.id).order_by(Assignment.created_at.desc())
+    assignments = assignments_q.limit(5).all()
+    assignments_payload = {
+        "total": assignments_q.count(),
+        "items": [
+            {
+                "id": a.id,
+                "title": a.title,
+                "class": f"{a.class_info.name} {a.class_info.section}" if a.class_info else None,
+                "due_date": a.due_date,
+            }
+            for a in assignments
+        ],
+    }
+
+    # Recent grades given by teacher
+    grades_q = db.query(Grade).filter(Grade.graded_by == current_user.id).order_by(Grade.graded_at.desc())
+    grades = grades_q.limit(5).all()
+    grades_payload = {
+        "total": grades_q.count(),
+        "items": [
+            {
+                "id": g.id,
+                "student": g.student.full_name if g.student else None,
+                "assignment": g.assessment_name,
+                "grade": g.grade_letter,
+                "score": round((g.percentage or g.percentage_score or 0), 2),
+            }
+            for g in grades
+        ],
+    }
+
+    return {
+        "classes": classes_payload,
+        "students": students_payload,
+        "assignments": assignments_payload,
+        "grades": grades_payload,
     }
 
 
@@ -861,11 +951,12 @@ async def get_current_teacher_profile(
 ) -> Any:
     """Get the current user's teacher profile"""
     
-    # Check if user is a teacher
-    if current_user.role != UserRole.TEACHER:
+    # Check if user has permission to access teacher profiles
+    # Allow teachers, admins, and superadmins (higher level roles)
+    if current_user.role not in [UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only teachers can access their profile"
+            detail="Only teachers, admins, and superadmins can access teacher profiles"
         )
     
     # Get teacher profile

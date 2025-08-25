@@ -7,7 +7,10 @@
         "user_management",
         "role_management",
         "system_configuration",
-        "all_modules_access"
+        "all_modules_access",
+        "live_class_management",
+        "live_class_host",
+        "live_class_join"
       ],
       "level": 100,
       "color": "#dc2626",
@@ -20,7 +23,10 @@
         "user_management",
         "academic_management",
         "financial_management",
-        "reports_access"
+        "reports_access",
+        "live_class_management",
+        "live_class_host",
+        "live_class_join"
       ],
       "level": 80,
       "color": "#2563eb",
@@ -37,7 +43,10 @@
         "communication_access",
         "attendance_management",
         "attendance_marking",
-        "attendance_reports"
+        "attendance_reports",
+        "live_class_management",
+        "live_class_host",
+        "live_class_join"
       ],
       "level": 60,
       "color": "#059669",
@@ -68,7 +77,8 @@
         "submit_assignments",
         "communication_access",
         "view_own_attendance",
-        "self_check_in"
+        "self_check_in",
+        "live_class_join"
       ],
       "level": 20,
       "color": "#ea580c",
@@ -175,6 +185,16 @@
       "roles": [
         "super_admin",
         "admin"
+      ]
+    },
+    "live_classes": {
+      "name": "Live Classes",
+      "description": "Schedule and manage live classes with Jitsi Meet",
+      "roles": [
+        "super_admin",
+        "admin",
+        "teacher",
+        "student"
       ]
     }
   },

@@ -22,7 +22,7 @@ from app.core.security import (
     validate_password_strength
 )
 from app.models.user import User, UserSession
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_with_impersonation
 from app.schemas.user import UserCreate, UserResponse, Token, PasswordReset, PasswordResetConfirm
 from app.services.auth import AuthService
 from app.services.notification import NotificationService
@@ -501,6 +501,174 @@ async def switch_role(
         "refresh_token": "",  # A new refresh token is not issued
         "token_type": "bearer",
         "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }
+
+
+@router.post("/impersonate-user/{user_id}")
+async def impersonate_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user_with_impersonation),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Impersonate another user (Super Admin and Admin only)
+    """
+    # Only super admins and admins can impersonate users
+    if current_user.role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can impersonate users"
+        )
+    
+    # Get the user to impersonate
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Prevent impersonating other admins unless you're a super admin
+    if target_user.role in [UserRole.SUPER_ADMIN, UserRole.ADMIN] and current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super administrators can impersonate other administrators"
+        )
+    
+    # For now, let's use a simpler approach - store impersonation state in the database
+    # and modify the Firebase authentication to check for impersonation
+    
+    # Create an impersonation session
+    from app.models.user import UserSession
+    import secrets
+    
+    # Generate a unique session token
+    session_token = f"impersonation_{secrets.token_urlsafe(32)}"
+    
+    logger.info(f"🎭 Creating impersonation session for user {target_user.id} by {current_user.id}")
+    logger.info(f"🔑 Generated session token: {session_token}")
+    
+    impersonation_session = UserSession(
+        user_id=target_user.id,
+        session_token=session_token,
+        impersonated_by=current_user.id,
+        is_impersonation=True,
+        is_active=True,
+        expires_at=datetime.utcnow() + timedelta(hours=1)  # 1 hour session
+    )
+    db.add(impersonation_session)
+    db.commit()
+    
+    logger.info(f"✅ Impersonation session created with ID: {impersonation_session.id}")
+    
+    # Log the impersonation
+    auth_service = AuthService(db)
+    auth_service.create_audit_log(
+        user_id=current_user.id,
+        action="user_impersonation",
+        details=f"Impersonated user {target_user.email} (ID: {target_user.id})"
+    )
+    
+    # Also log for the target user
+    auth_service.create_audit_log(
+        user_id=target_user.id,
+        action="user_impersonated",
+        details=f"Impersonated by {current_user.email} (ID: {current_user.id})"
+    )
+
+    # Get the original user (the one doing the impersonation)
+    original_user = db.query(User).filter(User.id == current_user.id).first()
+    
+    # Debug role values
+    logger.info(f"🎭 Target user role: {target_user.role} (type: {type(target_user.role)})")
+    logger.info(f"🎭 Target user role value: {target_user.role.value} (type: {type(target_user.role.value)})")
+    logger.info(f"🎭 Original user role: {original_user.role} (type: {type(original_user.role)})")
+    logger.info(f"🎭 Original user role value: {original_user.role.value} (type: {type(original_user.role.value)})")
+    
+    return {
+        "access_token": session_token,  # Return the actual session token
+        "refresh_token": "",
+        "token_type": "bearer",
+        "expires_in": 3600,  # 1 hour
+        "impersonated_user": {
+            "id": target_user.id,
+            "email": target_user.email,
+            "first_name": target_user.first_name,
+            "last_name": target_user.last_name,
+            "role": str(target_user.role.value),
+            "is_active": target_user.is_active,
+            "is_verified": target_user.is_verified,
+            "created_at": target_user.created_at.isoformat() if target_user.created_at else datetime.utcnow().isoformat(),
+            "updated_at": target_user.updated_at.isoformat() if target_user.updated_at else datetime.utcnow().isoformat(),
+            "language_preference": "en",
+            "timezone": "UTC"
+        },
+        "original_user": {
+            "id": original_user.id,
+            "email": original_user.email,
+            "first_name": original_user.first_name,
+            "last_name": original_user.last_name,
+            "role": str(original_user.role.value),
+            "is_active": original_user.is_active,
+            "is_verified": original_user.is_verified,
+            "created_at": original_user.created_at.isoformat() if original_user.created_at else datetime.utcnow().isoformat(),
+            "updated_at": original_user.updated_at.isoformat() if original_user.updated_at else datetime.utcnow().isoformat(),
+            "language_preference": "en",
+            "timezone": "UTC"
+        },
+        "session_id": impersonation_session.id
+    }
+
+
+@router.post("/stop-impersonation", response_model=Token)
+async def stop_impersonation(
+    current_user: User = Depends(get_current_user_with_impersonation),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Stop impersonating and return to original user
+    """
+    # Check if user is currently impersonating
+    if not hasattr(current_user, 'impersonated_by') or not current_user.impersonated_by:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Not currently impersonating any user"
+        )
+    
+    # Get the original user
+    original_user = db.query(User).filter(User.id == current_user.impersonated_by).first()
+    if not original_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Original user not found"
+        )
+    
+    # Deactivate the impersonation session
+    from app.models.user import UserSession
+    session = db.query(UserSession).filter(
+        UserSession.user_id == current_user.id,
+        UserSession.impersonated_by == current_user.impersonated_by,
+        UserSession.is_impersonation == True,
+        UserSession.is_active == True
+    ).first()
+    
+    if session:
+        session.is_active = False
+        db.commit()
+    
+    # Log the end of impersonation
+    auth_service = AuthService(db)
+    auth_service.create_audit_log(
+        user_id=original_user.id,
+        action="impersonation_ended",
+        details=f"Stopped impersonating user {current_user.email} (ID: {current_user.id})"
+    )
+
+    return {
+        "access_token": "session_ended",
+        "refresh_token": "",
+        "token_type": "bearer",
+        "expires_in": 0,
     }
 
 

@@ -21,6 +21,7 @@ from app.models.student import (
 )
 from app.api.deps import get_current_user
 from app.services.notification import NotificationService
+from app.core.role_config import role_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["attendance"])
@@ -940,3 +941,243 @@ async def get_attendance_reports(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate attendance report"
         )
+
+# Admin attendance by class endpoints
+@router.get("/admin/by-class/daily", response_model=dict)
+async def get_admin_attendance_by_class_daily(
+    class_id: Optional[int] = Query(None, description="Filter by specific class"),
+    date: Optional[date] = Query(None, description="Filter by specific date (default: today)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Get attendance by class for admins/superadmins - daily view"""
+    
+    # Check if user has permission to access attendance module
+    if not role_config.can_access_module(current_user.role.value, "attendance"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to access attendance module"
+        )
+    
+    # Only allow admins and superadmins
+    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can access this endpoint"
+        )
+    
+    # Use today's date if not specified
+    if not date:
+        date = datetime.now().date()
+    
+    # Get all classes if class_id not specified
+    if class_id:
+        classes = db.query(Class).filter(Class.id == class_id).all()
+    else:
+        classes = db.query(Class).filter(Class.is_active == True).all()
+    
+    attendance_data = []
+    
+    for class_obj in classes:
+        # Get students in this class
+        students = db.query(Student).filter(
+            Student.current_class_id == class_obj.id,
+            Student.is_active == True
+        ).all()
+        
+        # Get attendance records for this class and date
+        attendance_records = db.query(AttendanceRecord).filter(
+            AttendanceRecord.class_id == class_obj.id,
+            AttendanceRecord.date == date
+        ).options(joinedload(AttendanceRecord.student)).all()
+        
+        # Create attendance summary for this class
+        total_students = len(students)
+        present_count = len([r for r in attendance_records if r.status == "present"])
+        absent_count = len([r for r in attendance_records if r.status == "absent"])
+        late_count = len([r for r in attendance_records if r.status == "late"])
+        excused_count = len([r for r in attendance_records if r.status == "excused"])
+        
+        # Calculate attendance percentage
+        attendance_percentage = (present_count / total_students * 100) if total_students > 0 else 0
+        
+        class_attendance = {
+            "class_id": class_obj.id,
+            "class_name": f"{class_obj.name} {class_obj.section}",
+            "grade_level": class_obj.grade_level,
+            "academic_year": class_obj.academic_year,
+            "date": date.isoformat(),
+            "total_students": total_students,
+            "present": present_count,
+            "absent": absent_count,
+            "late": late_count,
+            "excused": excused_count,
+            "attendance_percentage": round(attendance_percentage, 2),
+            "students": []
+        }
+        
+        # Add individual student attendance
+        for student in students:
+            student_record = next((r for r in attendance_records if r.student_id == student.id), None)
+            # Safely get student name
+            student_name = "Unknown"
+            try:
+                if student.user:
+                    student_name = f"{student.user.first_name} {student.user.last_name}"
+            except Exception as e:
+                logger.warning(f"Could not get user info for student {student.id}: {e}")
+            
+            student_attendance = {
+                "student_id": student.id,
+                "student_name": student_name,
+                "roll_number": student.roll_number or "N/A",
+                "status": student_record.status if student_record else "not_marked",
+                "check_in_time": student_record.actual_check_in.isoformat() if student_record and student_record.actual_check_in else None,
+                "check_out_time": student_record.actual_check_out.isoformat() if student_record and student_record.actual_check_out else None,
+                "notes": student_record.notes if student_record else None
+            }
+            class_attendance["students"].append(student_attendance)
+        
+        attendance_data.append(class_attendance)
+    
+    return {
+        "date": date.isoformat(),
+        "classes": attendance_data,
+        "summary": {
+            "total_classes": len(attendance_data),
+            "total_students": sum(c["total_students"] for c in attendance_data),
+            "total_present": sum(c["present"] for c in attendance_data),
+            "total_absent": sum(c["absent"] for c in attendance_data),
+            "overall_percentage": round(
+                sum(c["present"] for c in attendance_data) / 
+                sum(c["total_students"] for c in attendance_data) * 100, 2
+            ) if sum(c["total_students"] for c in attendance_data) > 0 else 0
+        }
+    }
+
+@router.get("/admin/by-class/monthly", response_model=dict)
+async def get_admin_attendance_by_class_monthly(
+    class_id: Optional[int] = Query(None, description="Filter by specific class"),
+    year: int = Query(None, description="Year (default: current year)"),
+    month: int = Query(None, description="Month 1-12 (default: current month)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Get attendance by class for admins/superadmins - monthly view"""
+    
+    # Check if user has permission to access attendance module
+    if not role_config.can_access_module(current_user.role.value, "attendance"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to access attendance module"
+        )
+    
+    # Only allow admins and superadmins
+    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can access this endpoint"
+        )
+    
+    # Use current year/month if not specified
+    if not year:
+        year = datetime.now().year
+    if not month:
+        month = datetime.now().month
+    
+    # Calculate date range for the month
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = date(year, month + 1, 1) - timedelta(days=1)
+    
+    # Get all classes if class_id not specified
+    if class_id:
+        classes = db.query(Class).filter(Class.id == class_id).all()
+    else:
+        classes = db.query(Class).filter(Class.is_active == True).all()
+    
+    attendance_data = []
+    
+    for class_obj in classes:
+        # Get students in this class
+        students = db.query(Student).filter(
+            Student.current_class_id == class_obj.id,
+            Student.is_active == True
+        ).all()
+        
+        # Get attendance records for this class and month
+        attendance_records = db.query(AttendanceRecord).filter(
+            AttendanceRecord.class_id == class_obj.id,
+            AttendanceRecord.date >= start_date,
+            AttendanceRecord.date <= end_date
+        ).options(joinedload(AttendanceRecord.student)).all()
+        
+        # Calculate monthly statistics
+        total_students = len(students)
+        total_days = (end_date - start_date).days + 1
+        total_possible_attendance = total_students * total_days
+        
+        # Count attendance by status
+        present_count = len([r for r in attendance_records if r.status == "present"])
+        absent_count = len([r for r in attendance_records if r.status == "absent"])
+        late_count = len([r for r in attendance_records if r.status == "late"])
+        excused_count = len([r for r in attendance_records if r.status == "excused"])
+        
+        # Calculate monthly attendance percentage
+        monthly_percentage = (present_count / total_possible_attendance * 100) if total_possible_attendance > 0 else 0
+        
+        # Get daily breakdown
+        daily_breakdown = []
+        current_date = start_date
+        while current_date <= end_date:
+            day_records = [r for r in attendance_records if r.date == current_date]
+            day_present = len([r for r in day_records if r.status == "present"])
+            day_absent = len([r for r in day_records if r.status == "absent"])
+            day_late = len([r for r in day_records if r.status == "late"])
+            
+            daily_breakdown.append({
+                "date": current_date.isoformat(),
+                "day_name": current_date.strftime("%A"),
+                "present": day_present,
+                "absent": day_absent,
+                "late": day_late,
+                "total": total_students,
+                "percentage": round((day_present / total_students * 100), 2) if total_students > 0 else 0
+            })
+            current_date += timedelta(days=1)
+        
+        class_attendance = {
+            "class_id": class_obj.id,
+            "class_name": f"{class_obj.name} {class_obj.section}",
+            "grade_level": class_obj.grade_level,
+            "academic_year": class_obj.academic_year,
+            "month": month,
+            "year": year,
+            "total_students": total_students,
+            "total_days": total_days,
+            "total_present": present_count,
+            "total_absent": absent_count,
+            "total_late": late_count,
+            "total_excused": excused_count,
+            "monthly_percentage": round(monthly_percentage, 2),
+            "daily_breakdown": daily_breakdown
+        }
+        
+        attendance_data.append(class_attendance)
+    
+    return {
+        "year": year,
+        "month": month,
+        "classes": attendance_data,
+        "summary": {
+            "total_classes": len(attendance_data),
+            "total_students": sum(c["total_students"] for c in attendance_data),
+            "total_days": total_days,
+            "overall_monthly_percentage": round(
+                sum(c["total_present"] for c in attendance_data) / 
+                sum(c["total_students"] * c["total_days"] for c in attendance_data) * 100, 2
+            ) if sum(c["total_students"] * c["total_days"] for c in attendance_data) > 0 else 0
+        }
+    }

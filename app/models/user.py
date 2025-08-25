@@ -108,8 +108,13 @@ class UserSession(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     last_activity = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
+    # Impersonation fields
+    impersonated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    is_impersonation = Column(Boolean, default=False, nullable=False)
+    
     # Relationships
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
+    impersonator = relationship("User", foreign_keys=[impersonated_by])
     
     def __repr__(self):
         return f"<UserSession(id={self.id}, user_id={self.user_id}, active={self.is_active})>"
